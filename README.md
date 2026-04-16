@@ -1,11 +1,11 @@
-# AWS EC2 Instance Running Scheduler
+# EC2 Instance Running Scheduler (AWS CDK v2)
 
-[![GitHub](https://img.shields.io/github/license/gammarers-aws-cdk-constructs/aws-ec2-instance-running-scheduler?style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/aws-ec2-instance-running-scheduler/blob/main/LICENSE)
-[![npm (scoped)](https://img.shields.io/npm/v/aws-ec2-instance-running-scheduler?style=flat-square)](https://www.npmjs.com/package/aws-ec2-instance-running-scheduler)
-[![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/gammarers-aws-cdk-constructs/aws-ec2-instance-running-scheduler/release.yml?branch=main&label=release&style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/aws-ec2-instance-running-scheduler/actions/workflows/release.yml)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/gammarers-aws-cdk-constructs/aws-ec2-instance-running-scheduler?sort=semver&style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/aws-ec2-instance-running-scheduler/releases)
+[![GitHub](https://img.shields.io/github/license/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler?style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/ec2-instance-running-scheduler?style=flat-square)](https://www.npmjs.com/package/ec2-instance-running-scheduler)
+[![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/release.yml?branch=main&label=release&style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/actions/workflows/release.yml)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler?sort=semver&style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/releases)
 
-[![View on Construct Hub](https://constructs.dev/badge?package=aws-ec2-instance-running-scheduler)](https://constructs.dev/packages/aws-ec2-instance-running-scheduler)
+[![View on Construct Hub](https://constructs.dev/badge?package=ec2-instance-running-scheduler)](https://constructs.dev/packages/ec2-instance-running-scheduler)
 
 AWS CDK construct that starts and stops EC2 instances on a cron schedule using **EventBridge Scheduler** and a **Durable Execution Lambda**. The handler discovers instances with the **Resource Groups Tagging API**, runs start/stop and **polls until the instance reaches the target state** (durable `step` / `wait`), processes **multiple instances in parallel** (bounded concurrency), and posts **Slack** summary and per-instance thread messages using a secret from **Secrets Manager**. The Lambda emits **structured application logs** (invocation, EC2 transitions, Slack steps, completion) alongside JSON platform logs.
 
@@ -26,19 +26,19 @@ AWS CDK construct that starts and stops EC2 instances on a cron schedule using *
 **npm**
 
 ```bash
-npm install aws-ec2-instance-running-scheduler
+npm install ec2-instance-running-scheduler
 ```
 
 **yarn**
 
 ```bash
-yarn add aws-ec2-instance-running-scheduler
+yarn add ec2-instance-running-scheduler
 ```
 
 **pnpm**
 
 ```bash
-pnpm add aws-ec2-instance-running-scheduler
+pnpm add ec2-instance-running-scheduler
 ```
 
 ## Usage
@@ -48,7 +48,7 @@ Use the **construct** `EC2InstanceRunningScheduler` when embedding the scheduler
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { TimeZone } from 'aws-cdk-lib';
-import { EC2InstanceRunningScheduler } from 'aws-ec2-instance-running-scheduler';
+import { EC2InstanceRunningScheduler } from 'ec2-instance-running-scheduler';
 
 const app = new cdk.App();
 const stack = new cdk.Stack(app, 'MyStack');
@@ -82,7 +82,7 @@ Use the **stack** `EC2InstanceRunningScheduleStack` when deploying the scheduler
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { TimeZone } from 'aws-cdk-lib';
-import { EC2InstanceRunningScheduleStack } from 'aws-ec2-instance-running-scheduler';
+import { EC2InstanceRunningScheduleStack } from 'ec2-instance-running-scheduler';
 
 const app = new cdk.App();
 
