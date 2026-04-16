@@ -69,7 +69,8 @@
   },
   "devEngines": {
     "packageManager": {
-      "name": "npm",
+      "name": "yarn",
+      "version": "1.22.22",
       "onFail": "ignore"
     }
   },
