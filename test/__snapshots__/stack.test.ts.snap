@@ -1,0 +1,1336 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default schedule) Should match snapshot: default 1`] = `
+{
+  "Mappings": {
+    "ParamsandsecretslayerMap": {
+      "af-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:af-south-1:317013901791:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-east-1:768336418462:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-northeast-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-1:133490724326:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-northeast-2": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-2:738900069198:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-south-1:176022468876:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-1:044395824272:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-2": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-2:665172237481:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-3": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-3:490737872127:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ca-central-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ca-central-1:200266452380:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-central-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-central-1:187925254637:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-north-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-north-1:427196147048:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-south-1:325218067255:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-west-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-1:015030872274:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-west-2": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-2:133256977650:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-west-3": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-3:780235371811:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "me-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:me-south-1:832021897121:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "sa-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:sa-east-1:933737806257:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "us-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:us-east-1:177933569100:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "us-east-2": {
+        "1x0x103xarm64": "arn:aws:lambda:us-east-2:590474943231:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "us-west-1": {
+        "1x0x103xarm64": "arn:aws:lambda:us-west-1:997803712105:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "us-west-2": {
+        "1x0x103xarm64": "arn:aws:lambda:us-west-2:345057560386:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+    },
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+    },
+  },
+  "Resources": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5": {
+      "DependsOn": [
+        "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372",
+        "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+      ],
+      "Properties": {
+        "Architectures": [
+          "arm64",
+        ],
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "8414620d4164cdade2a206db906e1de2db48656128ab92c61b0a530bd8d6147f.zip",
+        },
+        "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
+        "DurableConfig": {
+          "ExecutionTimeout": 7200,
+          "RetentionPeriodInDays": 1,
+        },
+        "Environment": {
+          "Variables": {
+            "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1",
+            "PARAMETERS_SECRETS_EXTENSION_CACHE_ENABLED": "true",
+            "PARAMETERS_SECRETS_EXTENSION_CACHE_SIZE": "500",
+            "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
+            "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
+            "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
+            "SECRETS_MANAGER_TTL": "300",
+            "SLACK_SECRET_NAME": "test/slack-webhook",
+            "SSM_PARAMETER_STORE_TIMEOUT_MILLIS": "0",
+            "SSM_PARAMETER_STORE_TTL": "300",
+          },
+        },
+        "Handler": "index.handler",
+        "Layers": [
+          {
+            "Fn::FindInMap": [
+              "ParamsandsecretslayerMap",
+              {
+                "Ref": "AWS::Region",
+              },
+              "1x0x103xarm64",
+            ],
+          },
+        ],
+        "LoggingConfig": {
+          "ApplicationLogLevel": "INFO",
+          "LogFormat": "JSON",
+          "LogGroup": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9",
+          },
+          "SystemLogLevel": "INFO",
+        },
+        "MemorySize": 512,
+        "Role": {
+          "Fn::GetAtt": [
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 900,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a661985107c8772c4f9370fb0ddbb677",
+            "Version",
+          ],
+        },
+        "Name": "live",
+      },
+      "Type": "AWS::Lambda::Alias",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a661985107c8772c4f9370fb0ddbb677": {
+      "Metadata": {
+        "aws:cdk:do-not-refactor": true,
+      },
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+      },
+      "Type": "AWS::Lambda::Version",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionEventInvokeConfig871A1557": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+        "MaximumRetryAttempts": 2,
+        "Qualifier": "$LATEST",
+      },
+      "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "tag:GetResources",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "GetResources",
+            },
+            {
+              "Action": [
+                "ec2:DescribeInstances",
+                "ec2:StartInstances",
+                "ec2:StopInstances",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2RunningControl",
+            },
+            {
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":secretsmanager:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":secret:test/slack-webhook-??????",
+                  ],
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372",
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "EC2InstanceRunningSchedulerRunningStartSchedule7939E79E": {
+      "Properties": {
+        "Description": "running start schedule",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF",
+        },
+        "ScheduleExpression": "cron(50 7 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Etc/UTC",
+        "State": "ENABLED",
+        "Target": {
+          "Arn": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+          },
+          "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Start"}}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 86400,
+            "MaximumRetryAttempts": 185,
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRoleForTargete08d553488D726",
+              "Arn",
+            ],
+          },
+        },
+      },
+      "Type": "AWS::Scheduler::Schedule",
+    },
+    "EC2InstanceRunningSchedulerRunningStopScheduleF9EAB489": {
+      "Properties": {
+        "Description": "running stop schedule",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF",
+        },
+        "ScheduleExpression": "cron(5 19 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Etc/UTC",
+        "State": "ENABLED",
+        "Target": {
+          "Arn": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+          },
+          "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Stop"}}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 86400,
+            "MaximumRetryAttempts": 185,
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRoleForTargete08d553488D726",
+              "Arn",
+            ],
+          },
+        },
+      },
+      "Type": "AWS::Scheduler::Schedule",
+    },
+    "SchedulerRoleForTargete08d553488D726": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId",
+                  },
+                  "aws:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition",
+                        },
+                        ":scheduler:",
+                        {
+                          "Ref": "AWS::Region",
+                        },
+                        ":",
+                        {
+                          "Ref": "AWS::AccountId",
+                        },
+                        ":schedule-group/default",
+                      ],
+                    ],
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "scheduler.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "SchedulerRoleForTargete08d55DefaultPolicy859F6AB4": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "lambda:InvokeFunction",
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "SchedulerRoleForTargete08d55DefaultPolicy859F6AB4",
+        "Roles": [
+          {
+            "Ref": "SchedulerRoleForTargete08d553488D726",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                  ],
+                  {
+                    "Ref": "BootstrapVersion",
+                  },
+                ],
+              },
+            ],
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI.",
+        },
+      ],
+    },
+  },
+}
+`;
+
+exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Should match snapshot: disable 1`] = `
+{
+  "Mappings": {
+    "ParamsandsecretslayerMap": {
+      "af-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:af-south-1:317013901791:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-east-1:768336418462:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-northeast-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-1:133490724326:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-northeast-2": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-2:738900069198:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-south-1:176022468876:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-1:044395824272:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-2": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-2:665172237481:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-3": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-3:490737872127:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ca-central-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ca-central-1:200266452380:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-central-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-central-1:187925254637:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-north-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-north-1:427196147048:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-south-1:325218067255:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-west-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-1:015030872274:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-west-2": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-2:133256977650:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-west-3": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-3:780235371811:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "me-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:me-south-1:832021897121:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "sa-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:sa-east-1:933737806257:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "us-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:us-east-1:177933569100:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "us-east-2": {
+        "1x0x103xarm64": "arn:aws:lambda:us-east-2:590474943231:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "us-west-1": {
+        "1x0x103xarm64": "arn:aws:lambda:us-west-1:997803712105:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "us-west-2": {
+        "1x0x103xarm64": "arn:aws:lambda:us-west-2:345057560386:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+    },
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+    },
+  },
+  "Resources": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5": {
+      "DependsOn": [
+        "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372",
+        "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+      ],
+      "Properties": {
+        "Architectures": [
+          "arm64",
+        ],
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "8414620d4164cdade2a206db906e1de2db48656128ab92c61b0a530bd8d6147f.zip",
+        },
+        "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
+        "DurableConfig": {
+          "ExecutionTimeout": 7200,
+          "RetentionPeriodInDays": 1,
+        },
+        "Environment": {
+          "Variables": {
+            "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1",
+            "PARAMETERS_SECRETS_EXTENSION_CACHE_ENABLED": "true",
+            "PARAMETERS_SECRETS_EXTENSION_CACHE_SIZE": "500",
+            "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
+            "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
+            "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
+            "SECRETS_MANAGER_TTL": "300",
+            "SLACK_SECRET_NAME": "test/slack-webhook",
+            "SSM_PARAMETER_STORE_TIMEOUT_MILLIS": "0",
+            "SSM_PARAMETER_STORE_TTL": "300",
+          },
+        },
+        "Handler": "index.handler",
+        "Layers": [
+          {
+            "Fn::FindInMap": [
+              "ParamsandsecretslayerMap",
+              {
+                "Ref": "AWS::Region",
+              },
+              "1x0x103xarm64",
+            ],
+          },
+        ],
+        "LoggingConfig": {
+          "ApplicationLogLevel": "INFO",
+          "LogFormat": "JSON",
+          "LogGroup": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9",
+          },
+          "SystemLogLevel": "INFO",
+        },
+        "MemorySize": 512,
+        "Role": {
+          "Fn::GetAtt": [
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 900,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a661985107c8772c4f9370fb0ddbb677",
+            "Version",
+          ],
+        },
+        "Name": "live",
+      },
+      "Type": "AWS::Lambda::Alias",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a661985107c8772c4f9370fb0ddbb677": {
+      "Metadata": {
+        "aws:cdk:do-not-refactor": true,
+      },
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+      },
+      "Type": "AWS::Lambda::Version",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionEventInvokeConfig871A1557": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+        "MaximumRetryAttempts": 2,
+        "Qualifier": "$LATEST",
+      },
+      "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "tag:GetResources",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "GetResources",
+            },
+            {
+              "Action": [
+                "ec2:DescribeInstances",
+                "ec2:StartInstances",
+                "ec2:StopInstances",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2RunningControl",
+            },
+            {
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":secretsmanager:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":secret:test/slack-webhook-??????",
+                  ],
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372",
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "EC2InstanceRunningSchedulerRunningStartSchedule7939E79E": {
+      "Properties": {
+        "Description": "running start schedule",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF",
+        },
+        "ScheduleExpression": "cron(50 7 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Etc/UTC",
+        "State": "DISABLED",
+        "Target": {
+          "Arn": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+          },
+          "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Start"}}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 86400,
+            "MaximumRetryAttempts": 185,
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRoleForTargete08d553488D726",
+              "Arn",
+            ],
+          },
+        },
+      },
+      "Type": "AWS::Scheduler::Schedule",
+    },
+    "EC2InstanceRunningSchedulerRunningStopScheduleF9EAB489": {
+      "Properties": {
+        "Description": "running stop schedule",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF",
+        },
+        "ScheduleExpression": "cron(5 19 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Etc/UTC",
+        "State": "DISABLED",
+        "Target": {
+          "Arn": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+          },
+          "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Stop"}}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 86400,
+            "MaximumRetryAttempts": 185,
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRoleForTargete08d553488D726",
+              "Arn",
+            ],
+          },
+        },
+      },
+      "Type": "AWS::Scheduler::Schedule",
+    },
+    "SchedulerRoleForTargete08d553488D726": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId",
+                  },
+                  "aws:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition",
+                        },
+                        ":scheduler:",
+                        {
+                          "Ref": "AWS::Region",
+                        },
+                        ":",
+                        {
+                          "Ref": "AWS::AccountId",
+                        },
+                        ":schedule-group/default",
+                      ],
+                    ],
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "scheduler.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "SchedulerRoleForTargete08d55DefaultPolicy859F6AB4": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "lambda:InvokeFunction",
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "SchedulerRoleForTargete08d55DefaultPolicy859F6AB4",
+        "Roles": [
+          {
+            "Ref": "SchedulerRoleForTargete08d553488D726",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                  ],
+                  {
+                    "Ref": "BootstrapVersion",
+                  },
+                ],
+              },
+            ],
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI.",
+        },
+      ],
+    },
+  },
+}
+`;
+
+exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone) Should match snapshot: specific 1`] = `
+{
+  "Mappings": {
+    "ParamsandsecretslayerMap": {
+      "af-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:af-south-1:317013901791:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-east-1:768336418462:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-northeast-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-1:133490724326:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-northeast-2": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-2:738900069198:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ap-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-south-1:176022468876:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-1:044395824272:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-2": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-2:665172237481:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "ap-southeast-3": {
+        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-3:490737872127:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "ca-central-1": {
+        "1x0x103xarm64": "arn:aws:lambda:ca-central-1:200266452380:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-central-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-central-1:187925254637:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-north-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-north-1:427196147048:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-south-1:325218067255:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "eu-west-1": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-1:015030872274:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-west-2": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-2:133256977650:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "eu-west-3": {
+        "1x0x103xarm64": "arn:aws:lambda:eu-west-3:780235371811:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "me-south-1": {
+        "1x0x103xarm64": "arn:aws:lambda:me-south-1:832021897121:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "sa-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:sa-east-1:933737806257:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "us-east-1": {
+        "1x0x103xarm64": "arn:aws:lambda:us-east-1:177933569100:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "us-east-2": {
+        "1x0x103xarm64": "arn:aws:lambda:us-east-2:590474943231:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+      "us-west-1": {
+        "1x0x103xarm64": "arn:aws:lambda:us-west-1:997803712105:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
+      },
+      "us-west-2": {
+        "1x0x103xarm64": "arn:aws:lambda:us-west-2:345057560386:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
+      },
+    },
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+    },
+  },
+  "Resources": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5": {
+      "DependsOn": [
+        "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372",
+        "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+      ],
+      "Properties": {
+        "Architectures": [
+          "arm64",
+        ],
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "8414620d4164cdade2a206db906e1de2db48656128ab92c61b0a530bd8d6147f.zip",
+        },
+        "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
+        "DurableConfig": {
+          "ExecutionTimeout": 7200,
+          "RetentionPeriodInDays": 1,
+        },
+        "Environment": {
+          "Variables": {
+            "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1",
+            "PARAMETERS_SECRETS_EXTENSION_CACHE_ENABLED": "true",
+            "PARAMETERS_SECRETS_EXTENSION_CACHE_SIZE": "500",
+            "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
+            "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
+            "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
+            "SECRETS_MANAGER_TTL": "300",
+            "SLACK_SECRET_NAME": "test/slack-webhook",
+            "SSM_PARAMETER_STORE_TIMEOUT_MILLIS": "0",
+            "SSM_PARAMETER_STORE_TTL": "300",
+          },
+        },
+        "Handler": "index.handler",
+        "Layers": [
+          {
+            "Fn::FindInMap": [
+              "ParamsandsecretslayerMap",
+              {
+                "Ref": "AWS::Region",
+              },
+              "1x0x103xarm64",
+            ],
+          },
+        ],
+        "LoggingConfig": {
+          "ApplicationLogLevel": "INFO",
+          "LogFormat": "JSON",
+          "LogGroup": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9",
+          },
+          "SystemLogLevel": "INFO",
+        },
+        "MemorySize": 512,
+        "Role": {
+          "Fn::GetAtt": [
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 900,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a661985107c8772c4f9370fb0ddbb677",
+            "Version",
+          ],
+        },
+        "Name": "live",
+      },
+      "Type": "AWS::Lambda::Alias",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a661985107c8772c4f9370fb0ddbb677": {
+      "Metadata": {
+        "aws:cdk:do-not-refactor": true,
+      },
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+      },
+      "Type": "AWS::Lambda::Version",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionEventInvokeConfig871A1557": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
+        },
+        "MaximumRetryAttempts": 2,
+        "Qualifier": "$LATEST",
+      },
+      "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "tag:GetResources",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "GetResources",
+            },
+            {
+              "Action": [
+                "ec2:DescribeInstances",
+                "ec2:StartInstances",
+                "ec2:StopInstances",
+              ],
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2RunningControl",
+            },
+            {
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":secretsmanager:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":secret:test/slack-webhook-??????",
+                  ],
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "EC2InstanceRunningSchedulerRunningSchedulerFunctionRoleDefaultPolicy567D5372",
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "EC2InstanceRunningSchedulerRunningStartSchedule7939E79E": {
+      "Properties": {
+        "Description": "running start schedule",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF",
+        },
+        "ScheduleExpression": "cron(55 8 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Asia/Tokyo",
+        "State": "ENABLED",
+        "Target": {
+          "Arn": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+          },
+          "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Start"}}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 86400,
+            "MaximumRetryAttempts": 185,
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRoleForTargete08d553488D726",
+              "Arn",
+            ],
+          },
+        },
+      },
+      "Type": "AWS::Scheduler::Schedule",
+    },
+    "EC2InstanceRunningSchedulerRunningStopScheduleF9EAB489": {
+      "Properties": {
+        "Description": "running stop schedule",
+        "FlexibleTimeWindow": {
+          "Mode": "OFF",
+        },
+        "ScheduleExpression": "cron(5 19 ? * MON-FRI *)",
+        "ScheduleExpressionTimezone": "Asia/Tokyo",
+        "State": "ENABLED",
+        "Target": {
+          "Arn": {
+            "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+          },
+          "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Stop"}}",
+          "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 86400,
+            "MaximumRetryAttempts": 185,
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "SchedulerRoleForTargete08d553488D726",
+              "Arn",
+            ],
+          },
+        },
+      },
+      "Type": "AWS::Scheduler::Schedule",
+    },
+    "SchedulerRoleForTargete08d553488D726": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId",
+                  },
+                  "aws:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition",
+                        },
+                        ":scheduler:",
+                        {
+                          "Ref": "AWS::Region",
+                        },
+                        ":",
+                        {
+                          "Ref": "AWS::AccountId",
+                        },
+                        ":schedule-group/default",
+                      ],
+                    ],
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "scheduler.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "SchedulerRoleForTargete08d55DefaultPolicy859F6AB4": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "lambda:InvokeFunction",
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "SchedulerRoleForTargete08d55DefaultPolicy859F6AB4",
+        "Roles": [
+          {
+            "Ref": "SchedulerRoleForTargete08d553488D726",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                  ],
+                  {
+                    "Ref": "BootstrapVersion",
+                  },
+                ],
+              },
+            ],
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI.",
+        },
+      ],
+    },
+  },
+}
+`;
