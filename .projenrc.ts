@@ -22,7 +22,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
     'safe-env-getter@^0.2',
   ],
   releaseToNpm: true,
-  // npmTrustedPublishing: true,
+  npmTrustedPublishing: true,
   npmAccess: javascript.NpmAccess.PUBLIC,
   mergify: true,
   minNodeVersion: '20.0.0',
