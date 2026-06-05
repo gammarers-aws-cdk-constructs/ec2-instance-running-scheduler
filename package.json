@@ -1,5 +1,6 @@
 {
   "name": "ec2-instance-running-scheduler",
+  "description": "AWS CDK construct library that starts and stops EC2 instances on a cron schedule using EventBridge Scheduler and a Durable Execution Lambda. The handler discovers instances with the Resource Groups Tagging API, issues start/stop, polls until each instance reaches a stable target state (durable step / wait), processes multiple instances in parallel (bounded concurrency), and posts Slack summary and per-instance thread messages using a secret from Secrets Manager. The Lambda emits structured application logs alongside JSON platform logs.",
   "repository": {
     "type": "git",
     "url": "https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler.git"
@@ -75,7 +76,13 @@
     "constructs": "^10.5.1"
   },
   "keywords": [
-    "cdk"
+    "cdk",
+    "durable",
+    "ec2",
+    "execution",
+    "lambda",
+    "scheduler",
+    "slack"
   ],
   "engines": {
     "node": ">= 20.0.0"
