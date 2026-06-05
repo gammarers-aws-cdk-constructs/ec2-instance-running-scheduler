@@ -1,6 +1,6 @@
-import { App, TimeZone } from 'aws-cdk-lib';
+import { App, Stack, TimeZone } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { EC2InstanceRunningScheduleStack } from '../src';
+import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack } from '../src';
 
 const baseProps = {
   targetResource: {
@@ -30,6 +30,17 @@ describe('EC2InstanceRunningScheduleStack', () => {
 
     it('Should have Lambda Alias for Durable invocation', () => {
       template.resourceCountIs('AWS::Lambda::Alias', 1);
+    });
+
+    it('Should set default resource polling limits on Lambda', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            PROCESS_RESOURCE_MAX_LOOP_COUNT: '90',
+            PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '1800',
+          },
+        },
+      });
     });
 
     it('Should have default Start Schedule (50 7 MON-FRI Etc/UTC)', () => {
@@ -119,6 +130,31 @@ describe('EC2InstanceRunningScheduleStack', () => {
 
     it('Should match snapshot', () => {
       expect(template.toJSON()).toMatchSnapshot('specific');
+    });
+  });
+});
+
+describe('EC2InstanceRunningScheduler resourcePolling', () => {
+  it('sets custom polling limits on the Lambda environment', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      resourcePolling: {
+        maxLoopCount: 42,
+        maxElapsedSeconds: 900,
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          PROCESS_RESOURCE_MAX_LOOP_COUNT: '42',
+          PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '900',
+          SLACK_SECRET_NAME: baseProps.secrets.slackSecretName,
+        },
+      },
     });
   });
 });
