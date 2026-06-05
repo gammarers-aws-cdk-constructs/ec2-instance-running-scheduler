@@ -66,4 +66,5 @@ const project = new awscdk.AwsCdkConstructLibrary({
     },
   },
 });
+project.eslint?.allowDevDeps('src/funcs/running-scheduler-polling-env.ts');
 project.synth();

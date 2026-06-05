@@ -18,7 +18,7 @@ import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/cl
 import { WebClient } from '@slack/web-api';
 import { secretFetcher } from 'aws-lambda-secret-fetcher';
 import { SafeEnvGetter } from 'safe-env-getter';
-import { parseResourcePollingLimitsFromEnv } from './running-scheduler-polling-config';
+import { parseResourcePollingLimitsFromEnv } from './running-scheduler-polling-env';
 import {
   formatResourcePollingFailure,
   getPollingAbortReason,
@@ -267,7 +267,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
     throw new Error('Invalid event: Params.TagKey, Params.TagValues, Params.Mode are required.');
   }
 
-  const pollingLimits = parseResourcePollingLimitsFromEnv(process.env);
+  const pollingLimits = parseResourcePollingLimitsFromEnv();
 
   // safe get Secrets name from environment variable
   const slackSecretName = SafeEnvGetter.getEnv('SLACK_SECRET_NAME');
