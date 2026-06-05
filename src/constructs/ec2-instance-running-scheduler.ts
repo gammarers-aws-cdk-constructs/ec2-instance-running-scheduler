@@ -7,6 +7,11 @@ import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { RunningSchedulerFunction } from '../funcs/running-scheduler-function';
+import {
+  PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
+  PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
+} from '../funcs/running-scheduler-polling-config';
+import { DEFAULT_RESOURCE_POLLING_LIMITS } from '../funcs/running-scheduler-predicates';
 
 /**
  * Cron-style schedule configuration for start/stop actions.
@@ -41,6 +46,28 @@ export interface Secrets {
 }
 
 /**
+ * CDK-side limits for per-instance stable-state polling in the Durable Lambda handler.
+ *
+ * Values are written to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV} and
+ * {@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV} on the running scheduler function.
+ * Prevents abnormal or stuck transitions from running until the Durable execution timeout.
+ */
+export interface ResourcePollingLimits {
+  /**
+   * Maximum describe/poll loop iterations per instance.
+   *
+   * @default {@link DEFAULT_RESOURCE_POLLING_LIMITS.maxLoopCount} (90)
+   */
+  readonly maxLoopCount?: number;
+  /**
+   * Maximum wall-clock seconds spent polling a single instance.
+   *
+   * @default {@link DEFAULT_RESOURCE_POLLING_LIMITS.maxElapsedSeconds} (1800, 30 minutes)
+   */
+  readonly maxElapsedSeconds?: number;
+}
+
+/**
  * Properties for creating an EC2 instance running scheduler.
  */
 export interface EC2InstanceRunningSchedulerProps {
@@ -54,6 +81,12 @@ export interface EC2InstanceRunningSchedulerProps {
   readonly stopSchedule?: Schedule;
   /** Cron schedule for starting instances. */
   readonly startSchedule?: Schedule;
+  /**
+   * Per-instance polling limits for the running scheduler Lambda.
+   *
+   * @default {@link DEFAULT_RESOURCE_POLLING_LIMITS}
+   */
+  readonly resourcePolling?: ResourcePollingLimits;
 }
 
 /**
@@ -61,6 +94,9 @@ export interface EC2InstanceRunningSchedulerProps {
  *
  * Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
  * the Resource Groups Tagging API and EC2 APIs; Slack notifications use the secret named in {@link Secrets.slackSecretName}.
+ *
+ * Per-instance polling timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourcePolling}
+ * and enforced in the handler before the Durable execution timeout.
  */
 export class EC2InstanceRunningScheduler extends Construct {
   /**
@@ -68,7 +104,7 @@ export class EC2InstanceRunningScheduler extends Construct {
    *
    * @param scope - Parent construct.
    * @param id - Construct id.
-   * @param props - Target tags, optional cron overrides, Slack secret name, and schedule enable flag.
+   * @param props - Target tags, schedules, Slack secret, schedule enable flag, and optional {@link ResourcePollingLimits}.
    */
   constructor(scope: Construct, id: string, props: EC2InstanceRunningSchedulerProps) {
     super(scope, id);
@@ -89,6 +125,12 @@ export class EC2InstanceRunningScheduler extends Construct {
       },
       environment: {
         SLACK_SECRET_NAME: props.secrets.slackSecretName,
+        [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: String(
+          props.resourcePolling?.maxLoopCount ?? DEFAULT_RESOURCE_POLLING_LIMITS.maxLoopCount,
+        ),
+        [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: String(
+          props.resourcePolling?.maxElapsedSeconds ?? DEFAULT_RESOURCE_POLLING_LIMITS.maxElapsedSeconds,
+        ),
       },
       paramsAndSecrets: lambda.ParamsAndSecretsLayerVersion.fromVersion(lambda.ParamsAndSecretsVersions.V1_0_103, {
         cacheSize: 500,
