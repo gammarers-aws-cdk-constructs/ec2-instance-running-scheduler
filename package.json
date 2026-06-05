@@ -65,7 +65,7 @@
     "jsii-pacmak": "^1.132.0",
     "jsii-rosetta": "5.9.x",
     "projen": "^0.99.70",
-    "safe-env-getter": "^0.2",
+    "safe-env-getter": "^0.3.3",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "5.9.x"

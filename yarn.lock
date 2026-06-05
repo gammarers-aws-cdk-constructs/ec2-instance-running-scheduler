@@ -5730,10 +5730,10 @@ safe-buffer@~5.1.0, safe-buffer@~5.1.1:
   resolved "https://registry.yarnpkg.com/safe-buffer/-/safe-buffer-5.1.2.tgz#991ec69d296e0313747d59bdfd2b745c35f8828d"
   integrity sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==
 
-safe-env-getter@^0.2:
-  version "0.2.7"
-  resolved "https://registry.yarnpkg.com/safe-env-getter/-/safe-env-getter-0.2.7.tgz#ac49661a79f1922c11a5722eba087d5661d57413"
-  integrity sha512-a/QqN8TtyrtWL4c9NPGjWorW+QjQNAlfjhBGuPOCSloPqoN6vxBbtpHBd/GYFNiQh8pf2NjAhDf+PP7wV5K+ig==
+safe-env-getter@^0.3.3:
+  version "0.3.3"
+  resolved "https://registry.yarnpkg.com/safe-env-getter/-/safe-env-getter-0.3.3.tgz#80f0fb0e4c6c758f6b992ec40bb5c5ee015900c1"
+  integrity sha512-FfOjfUP4z9jYi/4CuZy0x8x8EjhrRjI7YgSibRVrpD9TX35Iqz6M+QikarMgWrEdTqjx4DFxQ4/V7JzzmCQsGA==
 
 safe-push-apply@^1.0.0:
   version "1.0.0"

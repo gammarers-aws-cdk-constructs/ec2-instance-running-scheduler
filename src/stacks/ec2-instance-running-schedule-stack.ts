@@ -4,6 +4,8 @@ import { EC2InstanceRunningScheduler, TargetResource, Secrets, Schedule } from '
 
 /**
  * Props for the EC2 instance running schedule CDK stack.
+ *
+ * @see {@link EC2InstanceRunningSchedulerProps} for construct-level options not exposed here (e.g. `resourcePolling`).
  */
 export interface EC2InstanceRunningScheduleStackProps extends StackProps {
   /** Tag-based target resource for EC2 instances to start/stop. */
@@ -19,15 +21,15 @@ export interface EC2InstanceRunningScheduleStackProps extends StackProps {
 }
 
 /**
- * CDK Stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
+ * CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
  */
 export class EC2InstanceRunningScheduleStack extends Stack {
   /**
-   * Creates the stack and the EC2InstanceRunningScheduler construct.
+   * Creates the stack and wires {@link EC2InstanceRunningScheduler}.
    *
-   * @param scope - Parent construct.
+   * @param scope - Parent construct or app.
    * @param id - Stack id.
-   * @param props - Stack props (target resource, schedules, secrets).
+   * @param props - Target resource, schedules, secrets, and standard stack props.
    */
   constructor(scope: Construct, id: string, props: EC2InstanceRunningScheduleStackProps) {
     super(scope, id, props);

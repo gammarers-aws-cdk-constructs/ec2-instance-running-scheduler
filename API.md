@@ -9,6 +9,9 @@ Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start
 Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
 the Resource Groups Tagging API and EC2 APIs; Slack notifications use the secret named in {@link Secrets.slackSecretName}.
 
+Per-instance polling timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourcePolling}
+and enforced in the handler before the Durable execution timeout.
+
 #### Initializers <a name="Initializers" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer"></a>
 
 ```typescript
@@ -21,7 +24,7 @@ new EC2InstanceRunningScheduler(scope: Construct, id: string, props: EC2Instance
 | --- | --- | --- |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | - Parent construct. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.id">id</a></code> | <code>string</code> | - Construct id. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a></code> | - Target tags, optional cron overrides, Slack secret name, and schedule enable flag. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a></code> | - Target tags, schedules, Slack secret, schedule enable flag, and optional {@link ResourcePollingLimits}. |
 
 ---
 
@@ -45,7 +48,7 @@ Construct id.
 
 - *Type:* <a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a>
 
-Target tags, optional cron overrides, Slack secret name, and schedule enable flag.
+Target tags, schedules, Slack secret, schedule enable flag, and optional {@link ResourcePollingLimits}.
 
 ---
 
@@ -150,7 +153,7 @@ The tree node.
 
 ### EC2InstanceRunningScheduleStack <a name="EC2InstanceRunningScheduleStack" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack"></a>
 
-CDK Stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
+CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
 
 #### Initializers <a name="Initializers" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer"></a>
 
@@ -162,9 +165,9 @@ new EC2InstanceRunningScheduleStack(scope: Construct, id: string, props: EC2Inst
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | - Parent construct. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | - Parent construct or app. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.id">id</a></code> | <code>string</code> | - Stack id. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps">EC2InstanceRunningScheduleStackProps</a></code> | - Stack props (target resource, schedules, secrets). |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps">EC2InstanceRunningScheduleStackProps</a></code> | - Target resource, schedules, secrets, and standard stack props. |
 
 ---
 
@@ -172,7 +175,7 @@ new EC2InstanceRunningScheduleStack(scope: Construct, id: string, props: EC2Inst
 
 - *Type:* constructs.Construct
 
-Parent construct.
+Parent construct or app.
 
 ---
 
@@ -188,7 +191,7 @@ Stack id.
 
 - *Type:* <a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps">EC2InstanceRunningScheduleStackProps</a>
 
-Stack props (target resource, schedules, secrets).
+Target resource, schedules, secrets, and standard stack props.
 
 ---
 
@@ -1126,6 +1129,7 @@ const eC2InstanceRunningSchedulerProps: EC2InstanceRunningSchedulerProps = { ...
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.secrets">secrets</a></code> | <code><a href="#ec2-instance-running-scheduler.Secrets">Secrets</a></code> | Secrets (e.g. Slack) used for notifications. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.targetResource">targetResource</a></code> | <code><a href="#ec2-instance-running-scheduler.TargetResource">TargetResource</a></code> | Tag-based targeting for EC2 instances to start/stop. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.enableScheduling">enableScheduling</a></code> | <code>boolean</code> | Whether EventBridge Scheduler rules are enabled. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.resourcePolling">resourcePolling</a></code> | <code><a href="#ec2-instance-running-scheduler.ResourcePollingLimits">ResourcePollingLimits</a></code> | Per-instance polling limits for the running scheduler Lambda. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.startSchedule">startSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for starting instances. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.stopSchedule">stopSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for stopping instances. |
 
@@ -1169,6 +1173,19 @@ Defaults to true if omitted.
 
 ---
 
+##### `resourcePolling`<sup>Optional</sup> <a name="resourcePolling" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.resourcePolling"></a>
+
+```typescript
+public readonly resourcePolling: ResourcePollingLimits;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.ResourcePollingLimits">ResourcePollingLimits</a>
+- *Default:* {@link DEFAULT_RESOURCE_POLLING_LIMITS }
+
+Per-instance polling limits for the running scheduler Lambda.
+
+---
+
 ##### `startSchedule`<sup>Optional</sup> <a name="startSchedule" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.startSchedule"></a>
 
 ```typescript
@@ -1196,6 +1213,8 @@ Cron schedule for stopping instances.
 ### EC2InstanceRunningScheduleStackProps <a name="EC2InstanceRunningScheduleStackProps" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps"></a>
 
 Props for the EC2 instance running schedule CDK stack.
+
+> [{@link EC2InstanceRunningSchedulerProps } for construct-level options not exposed here (e.g. `resourcePolling`).]({@link EC2InstanceRunningSchedulerProps } for construct-level options not exposed here (e.g. `resourcePolling`).)
 
 #### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.Initializer"></a>
 
@@ -1532,6 +1551,57 @@ public readonly stopSchedule: Schedule;
 - *Type:* <a href="#ec2-instance-running-scheduler.Schedule">Schedule</a>
 
 Cron schedule for stopping instances.
+
+---
+
+### ResourcePollingLimits <a name="ResourcePollingLimits" id="ec2-instance-running-scheduler.ResourcePollingLimits"></a>
+
+CDK-side limits for per-instance stable-state polling in the Durable Lambda handler.
+
+Values are written to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV} and
+{@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV} on the running scheduler function.
+Prevents abnormal or stuck transitions from running until the Durable execution timeout.
+
+#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.ResourcePollingLimits.Initializer"></a>
+
+```typescript
+import { ResourcePollingLimits } from 'ec2-instance-running-scheduler'
+
+const resourcePollingLimits: ResourcePollingLimits = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#ec2-instance-running-scheduler.ResourcePollingLimits.property.maxElapsedSeconds">maxElapsedSeconds</a></code> | <code>number</code> | Maximum wall-clock seconds spent polling a single instance. |
+| <code><a href="#ec2-instance-running-scheduler.ResourcePollingLimits.property.maxLoopCount">maxLoopCount</a></code> | <code>number</code> | Maximum describe/poll loop iterations per instance. |
+
+---
+
+##### `maxElapsedSeconds`<sup>Optional</sup> <a name="maxElapsedSeconds" id="ec2-instance-running-scheduler.ResourcePollingLimits.property.maxElapsedSeconds"></a>
+
+```typescript
+public readonly maxElapsedSeconds: number;
+```
+
+- *Type:* number
+- *Default:* {@link DEFAULT_RESOURCE_POLLING_LIMITS.maxElapsedSeconds } (1800, 30 minutes)
+
+Maximum wall-clock seconds spent polling a single instance.
+
+---
+
+##### `maxLoopCount`<sup>Optional</sup> <a name="maxLoopCount" id="ec2-instance-running-scheduler.ResourcePollingLimits.property.maxLoopCount"></a>
+
+```typescript
+public readonly maxLoopCount: number;
+```
+
+- *Type:* number
+- *Default:* {@link DEFAULT_RESOURCE_POLLING_LIMITS.maxLoopCount } (90)
+
+Maximum describe/poll loop iterations per instance.
 
 ---
 

@@ -124,7 +124,7 @@
     },
     {
       "name": "safe-env-getter",
-      "version": "^0.2",
+      "version": "^0.3.3",
       "type": "build"
     },
     {
