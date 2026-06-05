@@ -1,4 +1,4 @@
-# ec2-instance-running-scheduler
+# EC2 Instance Running Scheduler (AWS CDK v2)
 
 [![GitHub](https://img.shields.io/github/license/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler?style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/ec2-instance-running-scheduler?style=flat-square)](https://www.npmjs.com/package/ec2-instance-running-scheduler)
@@ -15,6 +15,7 @@ AWS CDK construct library that starts and stops EC2 instances on a cron schedule
 - **Durable Lambda** – One Lambda with AWS Lambda Durable Execution (`step`, `wait`, `map`, child contexts per instance) for long-running workflows without Step Functions.
 - **Stable-state polling** – After start/stop, the function waits (20 seconds between attempts) and re-describes instances until `running` (start mode) or `stopped` (stop mode).
 - **Configurable polling limits** – Per-instance **max loop count** and **max elapsed time** via `resourcePolling` (default: 90 loops / 1800 seconds). Failures use explicit `ResourcePollingFailed:*` messages instead of running until the Durable execution timeout (construct default: 2 hours).
+- **Validated environment variables** – The bundled handler parses required and polling env vars at invocation using strict decimal integer rules; polling limits must be **positive integers** (`> 0`).
 - **Slack notifications** – Parent message plus threaded updates per instance; credentials from Secrets Manager JSON (`token`, `channel`). The construct sets **`SLACK_SECRET_NAME`** on the function.
 - **Structured logging** – Durable execution **`ctx.logger`** for traceable JSON application logs (invocation, describe/start/stop/wait loops, polling limit errors, Slack steps, completion).
 - **Scheduling toggle** – Enable or disable both schedules without removing the stack (`enableScheduling`).
@@ -118,9 +119,11 @@ EventBridge Scheduler invokes the Lambda with `Params.TagKey`, `Params.TagValues
 
 | Variable | Source | Purpose |
 |----------|--------|---------|
-| `SLACK_SECRET_NAME` | `secrets.slackSecretName` | Secrets Manager secret for Slack |
+| `SLACK_SECRET_NAME` | `secrets.slackSecretName` | Secrets Manager secret for Slack (required) |
 | `PROCESS_RESOURCE_MAX_LOOP_COUNT` | `resourcePolling.maxLoopCount` (default `90`) | Max describe/poll iterations per instance |
 | `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS` | `resourcePolling.maxElapsedSeconds` (default `1800`) | Max wall-clock seconds polling one instance |
+
+When you set polling limits via `resourcePolling`, the construct writes them as decimal integer strings. If you override these variables manually, each value must be a **strict decimal integer** (e.g. `"120"` is valid; `"0x10"`, `"3.14"`, or `"10abc"` are rejected) and **greater than zero**. Invalid or missing `SLACK_SECRET_NAME` causes the handler to fail at the start of an invocation.
 
 ## Options
 
@@ -159,10 +162,10 @@ Includes `targetResource`, `secrets`, `startSchedule`, `stopSchedule`, `enableSc
 
 Written to `PROCESS_RESOURCE_MAX_LOOP_COUNT` and `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS` on the running scheduler Lambda.
 
-- `maxLoopCount` – Maximum describe/poll loop iterations per instance (default: **90**).
-- `maxElapsedSeconds` – Maximum wall-clock seconds spent polling one instance (default: **1800**, 30 minutes).
+- `maxLoopCount` – Maximum describe/poll loop iterations per instance (default: **90**). Must be a positive integer when set.
+- `maxElapsedSeconds` – Maximum wall-clock seconds spent polling one instance (default: **1800**, 30 minutes). Must be a positive integer when set.
 
-When a limit is exceeded, the handler throws an error with prefix `ResourcePollingFailed:` (`MaxLoopCountExceeded`, `MaxElapsedTimeExceeded`, or `UnexpectedInstanceState` for unknown EC2 states).
+When a limit is exceeded during polling, the handler throws an error with prefix `ResourcePollingFailed:` (`MaxLoopCountExceeded`, `MaxElapsedTimeExceeded`, or `UnexpectedInstanceState` for unknown EC2 states).
 
 ## Requirements
 
