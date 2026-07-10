@@ -7,7 +7,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
   typescriptVersion: '5.9.x',
   jsiiVersion: '5.9.x',
   name: 'ec2-instance-running-scheduler',
-  packageManager: javascript.NodePackageManager.YARN_CLASSIC,
+  packageManager: javascript.NodePackageManager.NPM,
   projenrcTs: true,
   repositoryUrl: 'https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler.git',
   description: 'AWS CDK construct library that starts and stops EC2 instances on a cron schedule using EventBridge Scheduler and a Durable Execution Lambda. The handler discovers instances with the Resource Groups Tagging API, issues start/stop, waits until each instance reaches a stable target state (durable step / wait), processes multiple instances in parallel (bounded concurrency), and posts Slack summary and per-instance thread messages using a secret from Secrets Manager. The Lambda emits structured application logs alongside JSON platform logs.',
