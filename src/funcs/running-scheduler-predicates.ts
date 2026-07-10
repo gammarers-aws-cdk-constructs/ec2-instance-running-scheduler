@@ -5,7 +5,7 @@
 /** Value of `Params.Mode` from the EventBridge Scheduler payload. */
 export type RunningSchedulerMode = 'Start' | 'Stop';
 
-/** Upper bounds for per-instance stable-state waiting in the running scheduler Lambda. */
+/** Upper bounds for per-instance stable-state waiting in the running scheduler Lambda handler. */
 export interface ResourceWaitLimits {
   /** Maximum describe/wait loop iterations before failing (each loop may include a durable wait). */
   readonly maxLoopCount: number;

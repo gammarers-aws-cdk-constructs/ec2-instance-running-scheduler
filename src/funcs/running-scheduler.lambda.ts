@@ -244,6 +244,7 @@ const processOneResource = async (
  *
  * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT` and
  * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS` via {@link parseResourceWaitLimitsFromEnv}.
+ * Slack API failures are logged as `running-scheduler: Slack post failed` for CloudWatch log filters.
  *
  * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
  * @param ctx - Root durable execution context.

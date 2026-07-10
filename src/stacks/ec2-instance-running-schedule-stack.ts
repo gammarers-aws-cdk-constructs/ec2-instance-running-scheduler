@@ -18,12 +18,16 @@ export interface EC2InstanceRunningScheduleStackProps extends StackProps {
   readonly stopSchedule?: Schedule;
   /** Cron schedule for starting instances. */
   readonly startSchedule?: Schedule;
-  /** Optional CloudWatch failure detection alarms. */
+  /** Optional CloudWatch failure detection alarms and log-based metrics. */
   readonly failureDetection?: FailureDetectionAlarms;
 }
 
 /**
  * CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
+ *
+ * Wires {@link EC2InstanceRunningScheduler} with targeting, schedules, secrets, scheduling toggle,
+ * and optional {@link FailureDetectionAlarms}. Does not expose {@link ResourceWaitLimits}; use the
+ * construct directly when custom per-instance wait limits are required.
  */
 export class EC2InstanceRunningScheduleStack extends Stack {
   /**
@@ -31,7 +35,7 @@ export class EC2InstanceRunningScheduleStack extends Stack {
    *
    * @param scope - Parent construct or app.
    * @param id - Stack id.
-   * @param props - Target resource, schedules, secrets, and standard stack props.
+   * @param props - Target resource, schedules, secrets, optional failure detection, and standard stack props.
    */
   constructor(scope: Construct, id: string, props: EC2InstanceRunningScheduleStackProps) {
     super(scope, id, props);

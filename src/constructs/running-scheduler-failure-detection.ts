@@ -6,7 +6,20 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 
+/** CloudWatch custom metric namespace for log-based failure detection metrics. */
 const METRIC_NAMESPACE = 'EC2InstanceRunningScheduler';
+
+/**
+ * Props accepted by {@link createRunningSchedulerFailureDetection}.
+ */
+interface CreateRunningSchedulerFailureDetectionProps {
+  /** Failure detection options; alarms are created only when {@link FailureDetectionAlarms.enabled} is true. */
+  readonly failureDetection?: FailureDetectionAlarms;
+  /** Running scheduler Lambda to monitor. */
+  readonly runningScheduleFunction: lambda.IFunction;
+  /** Application log group for the running scheduler Lambda. */
+  readonly logGroup: logs.ILogGroup;
+}
 
 /**
  * Optional CloudWatch alarms and log-based metrics for operational failure detection.
@@ -45,6 +58,12 @@ export interface RunningSchedulerFailureDetectionProps {
 const isFailureDetectionEnabled = (failureDetection: FailureDetectionAlarms): boolean =>
   failureDetection.enabled === true;
 
+/**
+ * Registers an SNS alarm action when a topic is configured.
+ *
+ * @param alarm - CloudWatch alarm to notify.
+ * @param alarmTopic - Optional SNS topic from {@link FailureDetectionAlarms.alarmTopic}.
+ */
 const attachAlarmActions = (alarm: cloudwatch.Alarm, alarmTopic?: sns.ITopic): void => {
   if (!alarmTopic) {
     return;
@@ -53,6 +72,16 @@ const attachAlarmActions = (alarm: cloudwatch.Alarm, alarmTopic?: sns.ITopic): v
   alarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
 };
 
+/**
+ * Creates a CloudWatch alarm that fires when a sum metric is greater than or equal to 1.
+ *
+ * Uses `treatMissingData: notBreaching` so scheduled invocations do not alarm between runs.
+ *
+ * @param scope - Parent construct.
+ * @param id - Alarm construct id.
+ * @param props - Metric to alarm on and optional SNS topic.
+ * @returns Configured CloudWatch alarm.
+ */
 const createLogSumAlarm = (
   scope: Construct,
   id: string,
@@ -75,8 +104,13 @@ const createLogSumAlarm = (
 /**
  * CloudWatch alarms and log-based metrics for the running scheduler Lambda.
  *
- * Covers Lambda invocation errors, Durable handler failures (excluding per-instance waiting),
- * EC2 stable-state wait failures (`ResourceWaitFailed:*`), and Slack API post failures.
+ * When enabled, creates four alarms:
+ * - `lambdaErrorsAlarm` – `AWS/Lambda` `Errors` metric.
+ * - `instanceStatusFailureAlarm` – log filter for `ResourceWaitFailed:*`.
+ * - `slackPostFailureAlarm` – log filter for `running-scheduler: Slack post failed`.
+ * - `durableExecutionFailureAlarm` – other handler-level `ERROR` logs (excluding the above).
+ *
+ * Custom metrics are published under the `EC2InstanceRunningScheduler` namespace.
  */
 export class RunningSchedulerFailureDetection extends Construct {
   /** SNS topic used for alarm actions, when configured. */
@@ -93,7 +127,7 @@ export class RunningSchedulerFailureDetection extends Construct {
   /**
    * @param scope - Parent construct.
    * @param id - Construct id.
-   * @param props - Lambda, log group, and alarm options.
+   * @param props - Lambda, log group, and {@link FailureDetectionAlarms} (must have `enabled: true`).
    */
   constructor(scope: Construct, id: string, props: RunningSchedulerFailureDetectionProps) {
     super(scope, id);
@@ -170,11 +204,7 @@ export class RunningSchedulerFailureDetection extends Construct {
 export const createRunningSchedulerFailureDetection = (
   scope: Construct,
   id: string,
-  props: {
-    readonly failureDetection?: FailureDetectionAlarms;
-    readonly runningScheduleFunction: lambda.IFunction;
-    readonly logGroup: logs.ILogGroup;
-  },
+  props: CreateRunningSchedulerFailureDetectionProps,
 ): RunningSchedulerFailureDetection | undefined => {
   if (!props.failureDetection || !isFailureDetectionEnabled(props.failureDetection)) {
     return undefined;

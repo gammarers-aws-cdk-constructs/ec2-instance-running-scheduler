@@ -59,9 +59,11 @@ export interface Secrets {
 /**
  * CDK-side limits for per-instance stable-state waiting in the Durable Lambda handler.
  *
- * Values are written to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV} and
+ * Optional fields map to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV} and
  * {@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV} on the running scheduler function.
  * Prevents abnormal or stuck transitions from running until the Durable execution timeout.
+ *
+ * @see {@link ResourceWaitLimits} in `running-scheduler-predicates.ts` for the handler-side required shape.
  */
 export interface ResourceWaitLimits {
   /**
@@ -101,6 +103,8 @@ export interface EC2InstanceRunningSchedulerProps {
   /**
    * Optional CloudWatch alarms and log-based metrics for failure detection.
    *
+   * Set `enabled: true` to create alarms; optionally pass `alarmTopic` for SNS notifications.
+   *
    * @default disabled when omitted
    */
   readonly failureDetection?: FailureDetectionAlarms;
@@ -113,18 +117,21 @@ export interface EC2InstanceRunningSchedulerProps {
  * the Resource Groups Tagging API and EC2 APIs; Slack notifications use the secret named in {@link Secrets.slackSecretName}.
  *
  * Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
- * and enforced in the handler before the Durable execution timeout.
+ * and enforced in the handler before the Durable execution timeout. Optional CloudWatch failure
+ * detection is available via {@link EC2InstanceRunningSchedulerProps.failureDetection}.
  */
 export class EC2InstanceRunningScheduler extends Construct {
   /** Failure detection alarms, when {@link EC2InstanceRunningSchedulerProps.failureDetection} is enabled. */
   public readonly failureDetection?: RunningSchedulerFailureDetection;
 
   /**
-   * Defines IAM, logging, two cron schedules (start/stop), and the bundled running-scheduler Lambda (Node.js, Durable Execution).
+   * Defines IAM, logging, optional failure detection alarms, two cron schedules (start/stop),
+   * and the bundled running-scheduler Lambda (Node.js, Durable Execution).
    *
    * @param scope - Parent construct.
    * @param id - Construct id.
-   * @param props - Target tags, schedules, Slack secret, schedule enable flag, and optional {@link ResourceWaitLimits}.
+   * @param props - Target tags, schedules, Slack secret, schedule enable flag, optional
+   *   {@link ResourceWaitLimits}, and optional {@link FailureDetectionAlarms}.
    */
   constructor(scope: Construct, id: string, props: EC2InstanceRunningSchedulerProps) {
     super(scope, id);
