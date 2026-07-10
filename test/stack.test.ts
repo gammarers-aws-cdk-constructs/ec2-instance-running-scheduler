@@ -1,5 +1,6 @@
 import { App, Stack, TimeZone } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack } from '../src';
 
 const baseProps = {
@@ -32,7 +33,7 @@ describe('EC2InstanceRunningScheduleStack', () => {
       template.resourceCountIs('AWS::Lambda::Alias', 1);
     });
 
-    it('Should set default resource polling limits on Lambda', () => {
+    it('Should set default resource wait limits on Lambda', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: {
@@ -134,13 +135,13 @@ describe('EC2InstanceRunningScheduleStack', () => {
   });
 });
 
-describe('EC2InstanceRunningScheduler resourcePolling', () => {
-  it('sets custom polling limits on the Lambda environment', () => {
+describe('EC2InstanceRunningScheduler resourceWait', () => {
+  it('sets custom wait limits on the Lambda environment', () => {
     const app = new App();
     const stack = new Stack(app, 'TestStack');
     new EC2InstanceRunningScheduler(stack, 'Scheduler', {
       ...baseProps,
-      resourcePolling: {
+      resourceWait: {
         maxLoopCount: 42,
         maxElapsedSeconds: 900,
       },
@@ -155,6 +156,90 @@ describe('EC2InstanceRunningScheduler resourcePolling', () => {
           SLACK_SECRET_NAME: baseProps.secrets.slackSecretName,
         },
       },
+    });
+  });
+});
+
+describe('EC2InstanceRunningScheduler failureDetection', () => {
+  it('does not create alarms by default', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
+    template.resourceCountIs('AWS::Logs::MetricFilter', 0);
+    template.resourceCountIs('AWS::SNS::Topic', 0);
+  });
+
+  it('creates failure detection alarms and log metric filters when enabled', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      failureDetection: {
+        enabled: true,
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
+    template.resourceCountIs('AWS::Logs::MetricFilter', 3);
+    template.hasResourceProperties('AWS::Logs::MetricFilter', {
+      FilterPattern: '"ResourceWaitFailed"',
+      MetricTransformations: [{
+        MetricNamespace: 'EC2InstanceRunningScheduler',
+        MetricName: 'InstanceStatusFailure',
+      }],
+    });
+    template.hasResourceProperties('AWS::Logs::MetricFilter', {
+      FilterPattern: '"running-scheduler: Slack post failed"',
+      MetricTransformations: [{
+        MetricNamespace: 'EC2InstanceRunningScheduler',
+        MetricName: 'SlackPostFailure',
+      }],
+    });
+  });
+
+  it('wires alarm actions when alarmTopic is provided', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    const alarmTopic = new sns.Topic(stack, 'OpsAlerts');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      failureDetection: {
+        enabled: true,
+        alarmTopic,
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::SNS::Topic', 1);
+    const alarms = template.findResources('AWS::CloudWatch::Alarm');
+    const alarmActions = Object.values(alarms).map((alarm) => alarm.Properties?.AlarmActions);
+    expect(alarmActions.every((actions) => Array.isArray(actions) && actions.length === 1)).toBe(true);
+    expect(alarmActions.every((actions) => JSON.stringify(actions).includes('OpsAlerts'))).toBe(true);
+  });
+
+  it('accepts an imported SNS topic for alarm actions', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    const alarmTopicArn = 'arn:aws:sns:ap-northeast-1:123456789012:ops-alerts';
+    const alarmTopic = sns.Topic.fromTopicArn(stack, 'ImportedOpsAlerts', alarmTopicArn);
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      failureDetection: {
+        enabled: true,
+        alarmTopic,
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::SNS::Topic', 0);
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmActions: [alarmTopicArn],
     });
   });
 });

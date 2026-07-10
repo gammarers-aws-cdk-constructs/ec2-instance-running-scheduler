@@ -7,10 +7,10 @@ const project = new awscdk.AwsCdkConstructLibrary({
   typescriptVersion: '5.9.x',
   jsiiVersion: '5.9.x',
   name: 'ec2-instance-running-scheduler',
-  packageManager: javascript.NodePackageManager.YARN_CLASSIC,
+  packageManager: javascript.NodePackageManager.NPM,
   projenrcTs: true,
   repositoryUrl: 'https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler.git',
-  description: 'AWS CDK construct library that starts and stops EC2 instances on a cron schedule using EventBridge Scheduler and a Durable Execution Lambda. The handler discovers instances with the Resource Groups Tagging API, issues start/stop, polls until each instance reaches a stable target state (durable step / wait), processes multiple instances in parallel (bounded concurrency), and posts Slack summary and per-instance thread messages using a secret from Secrets Manager. The Lambda emits structured application logs alongside JSON platform logs.',
+  description: 'AWS CDK construct library that starts and stops EC2 instances on a cron schedule using EventBridge Scheduler and a Durable Execution Lambda. The handler discovers instances with the Resource Groups Tagging API, issues start/stop, waits until each instance reaches a stable target state (durable step / wait), processes multiple instances in parallel (bounded concurrency), and posts Slack summary and per-instance thread messages using a secret from Secrets Manager. The Lambda emits structured application logs alongside JSON platform logs.',
   keywords: ['cdk', 'ec2', 'scheduler', 'durable', 'execution', 'lambda', 'slack'],
   devDeps: [
     '@aws/durable-execution-sdk-js@^1',
@@ -18,10 +18,10 @@ const project = new awscdk.AwsCdkConstructLibrary({
     '@aws-sdk/client-resource-groups-tagging-api@^3',
     '@slack/web-api@^6',
     '@types/aws-lambda@^8',
-    'aws-lambda-secret-fetcher@^0.3',
+    'aws-lambda-secret-fetcher@^0.6.1',
     'aws-sdk-client-mock@^2',
     'aws-sdk-client-mock-jest@^2',
-    'safe-env-getter@^0.3.3',
+    'strict-env-resolver@^0.5.1',
   ],
   releaseToNpm: true,
   npmTrustedPublishing: true,
@@ -67,5 +67,5 @@ const project = new awscdk.AwsCdkConstructLibrary({
     },
   },
 });
-project.eslint?.allowDevDeps('src/funcs/running-scheduler-polling-env.ts');
+project.eslint?.allowDevDeps('src/funcs/running-scheduler-wait-env.ts');
 project.synth();

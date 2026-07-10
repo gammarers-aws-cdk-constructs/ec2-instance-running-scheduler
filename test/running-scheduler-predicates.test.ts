@@ -1,6 +1,6 @@
 import {
-  formatResourcePollingFailure,
-  getPollingAbortReason,
+  formatResourceWaitFailure,
+  getWaitAbortReason,
   isDesiredStableState,
   isTransitioningState,
 } from '../src/funcs/running-scheduler-predicates';
@@ -30,7 +30,7 @@ describe('isTransitioningState', () => {
   });
 });
 
-describe('getPollingAbortReason', () => {
+describe('getWaitAbortReason', () => {
   const limits = { maxLoopCount: 3, maxElapsedSeconds: 100 };
   const startedAtMs = 1_000_000;
 
@@ -42,12 +42,12 @@ describe('getPollingAbortReason', () => {
   ] as const)(
     'loopCount=%i now-start=%ims -> %s',
     (loopCount, startedAt, now, expected) => {
-      expect(getPollingAbortReason(loopCount, startedAt, now, limits)).toBe(expected);
+      expect(getWaitAbortReason(loopCount, startedAt, now, limits)).toBe(expected);
     },
   );
 });
 
-describe('formatResourcePollingFailure', () => {
+describe('formatResourceWaitFailure', () => {
   const context = {
     identifier: 'i-abc',
     mode: 'Start' as const,
@@ -57,20 +57,20 @@ describe('formatResourcePollingFailure', () => {
   };
 
   it('formats MaxLoopCountExceeded', () => {
-    expect(formatResourcePollingFailure('MaxLoopCountExceeded', context)).toBe(
-      'ResourcePollingFailed:MaxLoopCountExceeded: identifier=i-abc mode=Start currentState=pending loopCount=3 maxLoopCount=90',
+    expect(formatResourceWaitFailure('MaxLoopCountExceeded', context)).toBe(
+      'ResourceWaitFailed:MaxLoopCountExceeded: identifier=i-abc mode=Start currentState=pending loopCount=3 maxLoopCount=90',
     );
   });
 
   it('formats MaxElapsedTimeExceeded', () => {
-    expect(formatResourcePollingFailure('MaxElapsedTimeExceeded', context)).toBe(
-      'ResourcePollingFailed:MaxElapsedTimeExceeded: identifier=i-abc mode=Start currentState=pending loopCount=3 maxElapsedSeconds=1800',
+    expect(formatResourceWaitFailure('MaxElapsedTimeExceeded', context)).toBe(
+      'ResourceWaitFailed:MaxElapsedTimeExceeded: identifier=i-abc mode=Start currentState=pending loopCount=3 maxElapsedSeconds=1800',
     );
   });
 
   it('formats UnexpectedInstanceState', () => {
-    expect(formatResourcePollingFailure('UnexpectedInstanceState', context)).toContain(
-      'ResourcePollingFailed:UnexpectedInstanceState:',
+    expect(formatResourceWaitFailure('UnexpectedInstanceState', context)).toContain(
+      'ResourceWaitFailed:UnexpectedInstanceState:',
     );
   });
 });

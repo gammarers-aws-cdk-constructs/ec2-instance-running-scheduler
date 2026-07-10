@@ -1,11 +1,11 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EC2InstanceRunningScheduler, TargetResource, Secrets, Schedule } from '../constructs/ec2-instance-running-scheduler';
+import { EC2InstanceRunningScheduler, TargetResource, Secrets, Schedule, type FailureDetectionAlarms } from '../constructs/ec2-instance-running-scheduler';
 
 /**
  * Props for the EC2 instance running schedule CDK stack.
  *
- * @see {@link EC2InstanceRunningSchedulerProps} for construct-level options not exposed here (e.g. `resourcePolling`).
+ * @see {@link EC2InstanceRunningSchedulerProps} for construct-level options not exposed here (e.g. `resourceWait`).
  */
 export interface EC2InstanceRunningScheduleStackProps extends StackProps {
   /** Tag-based target resource for EC2 instances to start/stop. */
@@ -18,10 +18,16 @@ export interface EC2InstanceRunningScheduleStackProps extends StackProps {
   readonly stopSchedule?: Schedule;
   /** Cron schedule for starting instances. */
   readonly startSchedule?: Schedule;
+  /** Optional CloudWatch failure detection alarms and log-based metrics. */
+  readonly failureDetection?: FailureDetectionAlarms;
 }
 
 /**
  * CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
+ *
+ * Wires {@link EC2InstanceRunningScheduler} with targeting, schedules, secrets, scheduling toggle,
+ * and optional {@link FailureDetectionAlarms}. Does not expose {@link ResourceWaitLimits}; use the
+ * construct directly when custom per-instance wait limits are required.
  */
 export class EC2InstanceRunningScheduleStack extends Stack {
   /**
@@ -29,7 +35,7 @@ export class EC2InstanceRunningScheduleStack extends Stack {
    *
    * @param scope - Parent construct or app.
    * @param id - Stack id.
-   * @param props - Target resource, schedules, secrets, and standard stack props.
+   * @param props - Target resource, schedules, secrets, optional failure detection, and standard stack props.
    */
   constructor(scope: Construct, id: string, props: EC2InstanceRunningScheduleStackProps) {
     super(scope, id, props);
@@ -40,6 +46,7 @@ export class EC2InstanceRunningScheduleStack extends Stack {
       secrets: props.secrets,
       stopSchedule: props.stopSchedule,
       startSchedule: props.startSchedule,
+      failureDetection: props.failureDetection,
     });
   }
 }

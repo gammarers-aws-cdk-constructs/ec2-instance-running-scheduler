@@ -5,28 +5,28 @@
 /** Value of `Params.Mode` from the EventBridge Scheduler payload. */
 export type RunningSchedulerMode = 'Start' | 'Stop';
 
-/** Upper bounds for per-instance stable-state polling in the running scheduler Lambda. */
-export interface ResourcePollingLimits {
-  /** Maximum describe/poll iterations before failing (each loop may include a durable wait). */
+/** Upper bounds for per-instance stable-state waiting in the running scheduler Lambda handler. */
+export interface ResourceWaitLimits {
+  /** Maximum describe/wait loop iterations before failing (each loop may include a durable wait). */
   readonly maxLoopCount: number;
-  /** Maximum wall-clock seconds from the first poll iteration before failing. */
+  /** Maximum wall-clock seconds from the first wait iteration before failing. */
   readonly maxElapsedSeconds: number;
 }
 
-/** Default polling limits (90 loops × 20s wait ≈ 30 minutes of waits; 30 minutes elapsed). */
-export const DEFAULT_RESOURCE_POLLING_LIMITS: ResourcePollingLimits = {
+/** Default wait limits (90 loops × 20s wait ≈ 30 minutes of waits; 30 minutes elapsed). */
+export const DEFAULT_RESOURCE_WAIT_LIMITS: ResourceWaitLimits = {
   maxLoopCount: 90,
   maxElapsedSeconds: 1800,
 };
 
 /**
- * Why per-instance polling stopped with an error.
+ * Why per-instance waiting stopped with an error.
  *
- * - `MaxLoopCountExceeded` – {@link getPollingAbortReason} hit {@link ResourcePollingLimits.maxLoopCount}.
- * - `MaxElapsedTimeExceeded` – elapsed wall-clock time exceeded {@link ResourcePollingLimits.maxElapsedSeconds}.
+ * - `MaxLoopCountExceeded` – {@link getWaitAbortReason} hit {@link ResourceWaitLimits.maxLoopCount}.
+ * - `MaxElapsedTimeExceeded` – elapsed wall-clock time exceeded {@link ResourceWaitLimits.maxElapsedSeconds}.
  * - `UnexpectedInstanceState` – state is neither stable, actionable, nor a known transition.
  */
-export type ResourcePollingFailureReason =
+export type ResourceWaitFailureReason =
   | 'MaxLoopCountExceeded'
   | 'MaxElapsedTimeExceeded'
   | 'UnexpectedInstanceState';
@@ -53,19 +53,19 @@ export const isTransitioningState = (mode: RunningSchedulerMode, currentState: s
   (mode === 'Stop' && (currentState === 'stopping' || currentState === 'shutting-down'));
 
 /**
- * Returns a polling abort reason when loop count or elapsed time exceeds configured limits.
+ * Returns a wait abort reason when loop count or elapsed time exceeds configured limits.
  *
- * @param loopCount - Zero-based iteration count for the current poll loop.
- * @param startedAtMs - Epoch milliseconds recorded at the start of polling (durable step).
+ * @param loopCount - Zero-based iteration count for the current wait loop.
+ * @param startedAtMs - Epoch milliseconds recorded at the start of waiting (durable step).
  * @param nowMs - Current epoch milliseconds (from a durable step when replay matters).
- * @param limits - Configured {@link ResourcePollingLimits}.
- * @returns Abort reason, or `undefined` when polling may continue.
+ * @param limits - Configured {@link ResourceWaitLimits}.
+ * @returns Abort reason, or `undefined` when waiting may continue.
  */
-export const getPollingAbortReason = (
+export const getWaitAbortReason = (
   loopCount: number,
   startedAtMs: number,
   nowMs: number,
-  limits: ResourcePollingLimits,
+  limits: ResourceWaitLimits,
 ): 'MaxLoopCountExceeded' | 'MaxElapsedTimeExceeded' | undefined => {
   if (loopCount >= limits.maxLoopCount) {
     return 'MaxLoopCountExceeded';
@@ -77,38 +77,38 @@ export const getPollingAbortReason = (
   return undefined;
 };
 
-/** Inputs for {@link formatResourcePollingFailure}. */
-export interface ResourcePollingFailureContext {
+/** Inputs for {@link formatResourceWaitFailure}. */
+export interface ResourceWaitFailureContext {
   /** EC2 instance id parsed from the target ARN. */
   readonly identifier: string;
   /** Scheduler mode from the invocation payload. */
   readonly mode: RunningSchedulerMode;
   /** Last observed instance state from `DescribeInstances`. */
   readonly currentState: string;
-  /** Zero-based poll loop iteration when the failure occurred. */
+  /** Zero-based wait loop iteration when the failure occurred. */
   readonly loopCount: number;
-  /** Active polling limits for limit-related failure messages. */
-  readonly limits: ResourcePollingLimits;
+  /** Active wait limits for limit-related failure messages. */
+  readonly limits: ResourceWaitLimits;
 }
 
 /**
- * Builds a stable, grep-friendly error message for polling failures.
+ * Builds a stable, grep-friendly error message for wait failures.
  *
  * @param reason - Failure category.
  * @param context - Instance id, mode, state, loop count, and limits.
- * @returns Message prefixed with `ResourcePollingFailed:` (e.g. `ResourcePollingFailed:MaxLoopCountExceeded: ...`).
+ * @returns Message prefixed with `ResourceWaitFailed:` (e.g. `ResourceWaitFailed:MaxLoopCountExceeded: ...`).
  */
-export const formatResourcePollingFailure = (
-  reason: ResourcePollingFailureReason,
-  context: ResourcePollingFailureContext,
+export const formatResourceWaitFailure = (
+  reason: ResourceWaitFailureReason,
+  context: ResourceWaitFailureContext,
 ): string => {
   const common =
     `identifier=${context.identifier} mode=${context.mode} currentState=${context.currentState} loopCount=${context.loopCount}`;
   if (reason === 'MaxLoopCountExceeded') {
-    return `ResourcePollingFailed:MaxLoopCountExceeded: ${common} maxLoopCount=${context.limits.maxLoopCount}`;
+    return `ResourceWaitFailed:MaxLoopCountExceeded: ${common} maxLoopCount=${context.limits.maxLoopCount}`;
   }
   if (reason === 'MaxElapsedTimeExceeded') {
-    return `ResourcePollingFailed:MaxElapsedTimeExceeded: ${common} maxElapsedSeconds=${context.limits.maxElapsedSeconds}`;
+    return `ResourceWaitFailed:MaxElapsedTimeExceeded: ${common} maxElapsedSeconds=${context.limits.maxElapsedSeconds}`;
   }
-  return `ResourcePollingFailed:UnexpectedInstanceState: ${common}`;
+  return `ResourceWaitFailed:UnexpectedInstanceState: ${common}`;
 };

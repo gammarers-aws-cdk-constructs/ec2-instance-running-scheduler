@@ -51,7 +51,7 @@
     },
     {
       "name": "aws-lambda-secret-fetcher",
-      "version": "^0.3",
+      "version": "^0.6.1",
       "type": "build"
     },
     {
@@ -123,8 +123,8 @@
       "type": "build"
     },
     {
-      "name": "safe-env-getter",
-      "version": "^0.3.3",
+      "name": "strict-env-resolver",
+      "version": "^0.5.1",
       "type": "build"
     },
     {
