@@ -1,11 +1,11 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EC2InstanceRunningScheduler, TargetResource, Secrets, Schedule } from '../constructs/ec2-instance-running-scheduler';
+import { EC2InstanceRunningScheduler, TargetResource, Secrets, Schedule, type FailureDetectionAlarms } from '../constructs/ec2-instance-running-scheduler';
 
 /**
  * Props for the EC2 instance running schedule CDK stack.
  *
- * @see {@link EC2InstanceRunningSchedulerProps} for construct-level options not exposed here (e.g. `resourcePolling`).
+ * @see {@link EC2InstanceRunningSchedulerProps} for construct-level options not exposed here (e.g. `resourceWait`).
  */
 export interface EC2InstanceRunningScheduleStackProps extends StackProps {
   /** Tag-based target resource for EC2 instances to start/stop. */
@@ -18,6 +18,8 @@ export interface EC2InstanceRunningScheduleStackProps extends StackProps {
   readonly stopSchedule?: Schedule;
   /** Cron schedule for starting instances. */
   readonly startSchedule?: Schedule;
+  /** Optional CloudWatch failure detection alarms. */
+  readonly failureDetection?: FailureDetectionAlarms;
 }
 
 /**
@@ -40,6 +42,7 @@ export class EC2InstanceRunningScheduleStack extends Stack {
       secrets: props.secrets,
       stopSchedule: props.stopSchedule,
       startSchedule: props.startSchedule,
+      failureDetection: props.failureDetection,
     });
   }
 }

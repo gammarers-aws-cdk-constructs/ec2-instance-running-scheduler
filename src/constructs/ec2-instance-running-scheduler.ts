@@ -6,12 +6,23 @@ import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+import {
+  createRunningSchedulerFailureDetection,
+  type FailureDetectionAlarms,
+  type RunningSchedulerFailureDetection,
+} from './running-scheduler-failure-detection';
 import { RunningSchedulerFunction } from '../funcs/running-scheduler-function';
+import { DEFAULT_RESOURCE_WAIT_LIMITS } from '../funcs/running-scheduler-predicates';
 import {
   PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
   PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
-} from '../funcs/running-scheduler-polling-config';
-import { DEFAULT_RESOURCE_POLLING_LIMITS } from '../funcs/running-scheduler-predicates';
+} from '../funcs/running-scheduler-wait-config';
+
+export type {
+  FailureDetectionAlarms,
+  RunningSchedulerFailureDetection,
+  RunningSchedulerFailureDetectionProps,
+} from './running-scheduler-failure-detection';
 
 /**
  * Cron-style schedule configuration for start/stop actions.
@@ -46,23 +57,23 @@ export interface Secrets {
 }
 
 /**
- * CDK-side limits for per-instance stable-state polling in the Durable Lambda handler.
+ * CDK-side limits for per-instance stable-state waiting in the Durable Lambda handler.
  *
  * Values are written to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV} and
  * {@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV} on the running scheduler function.
  * Prevents abnormal or stuck transitions from running until the Durable execution timeout.
  */
-export interface ResourcePollingLimits {
+export interface ResourceWaitLimits {
   /**
-   * Maximum describe/poll loop iterations per instance.
+   * Maximum describe/wait loop iterations per instance.
    *
-   * @default {@link DEFAULT_RESOURCE_POLLING_LIMITS.maxLoopCount} (90)
+   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount} (90)
    */
   readonly maxLoopCount?: number;
   /**
-   * Maximum wall-clock seconds spent polling a single instance.
+   * Maximum wall-clock seconds spent waiting for a single instance to stabilize.
    *
-   * @default {@link DEFAULT_RESOURCE_POLLING_LIMITS.maxElapsedSeconds} (1800, 30 minutes)
+   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds} (1800, 30 minutes)
    */
   readonly maxElapsedSeconds?: number;
 }
@@ -82,11 +93,17 @@ export interface EC2InstanceRunningSchedulerProps {
   /** Cron schedule for starting instances. */
   readonly startSchedule?: Schedule;
   /**
-   * Per-instance polling limits for the running scheduler Lambda.
+   * Per-instance wait limits for the running scheduler Lambda.
    *
-   * @default {@link DEFAULT_RESOURCE_POLLING_LIMITS}
+   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS}
    */
-  readonly resourcePolling?: ResourcePollingLimits;
+  readonly resourceWait?: ResourceWaitLimits;
+  /**
+   * Optional CloudWatch alarms and log-based metrics for failure detection.
+   *
+   * @default disabled when omitted
+   */
+  readonly failureDetection?: FailureDetectionAlarms;
 }
 
 /**
@@ -95,16 +112,19 @@ export interface EC2InstanceRunningSchedulerProps {
  * Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
  * the Resource Groups Tagging API and EC2 APIs; Slack notifications use the secret named in {@link Secrets.slackSecretName}.
  *
- * Per-instance polling timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourcePolling}
+ * Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
  * and enforced in the handler before the Durable execution timeout.
  */
 export class EC2InstanceRunningScheduler extends Construct {
+  /** Failure detection alarms, when {@link EC2InstanceRunningSchedulerProps.failureDetection} is enabled. */
+  public readonly failureDetection?: RunningSchedulerFailureDetection;
+
   /**
    * Defines IAM, logging, two cron schedules (start/stop), and the bundled running-scheduler Lambda (Node.js, Durable Execution).
    *
    * @param scope - Parent construct.
    * @param id - Construct id.
-   * @param props - Target tags, schedules, Slack secret, schedule enable flag, and optional {@link ResourcePollingLimits}.
+   * @param props - Target tags, schedules, Slack secret, schedule enable flag, and optional {@link ResourceWaitLimits}.
    */
   constructor(scope: Construct, id: string, props: EC2InstanceRunningSchedulerProps) {
     super(scope, id);
@@ -113,6 +133,11 @@ export class EC2InstanceRunningScheduler extends Construct {
 
     // Durable Functions-based Running Scheduler (previous Step Functions logic implemented in Lambda).
     // Durable Execution requires Node.js 22+.
+    const runningScheduleFunctionLogGroup = new logs.LogGroup(this, 'RunningSchedulerFunctionLogGroup', {
+      retention: logs.RetentionDays.THREE_MONTHS,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     const runningScheduleFunction = new RunningSchedulerFunction(this, 'RunningSchedulerFunction', {
       description: 'Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.',
       architecture: lambda.Architecture.ARM_64,
@@ -126,10 +151,10 @@ export class EC2InstanceRunningScheduler extends Construct {
       environment: {
         SLACK_SECRET_NAME: props.secrets.slackSecretName,
         [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: String(
-          props.resourcePolling?.maxLoopCount ?? DEFAULT_RESOURCE_POLLING_LIMITS.maxLoopCount,
+          props.resourceWait?.maxLoopCount ?? DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount,
         ),
         [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: String(
-          props.resourcePolling?.maxElapsedSeconds ?? DEFAULT_RESOURCE_POLLING_LIMITS.maxElapsedSeconds,
+          props.resourceWait?.maxElapsedSeconds ?? DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds,
         ),
       },
       paramsAndSecrets: lambda.ParamsAndSecretsLayerVersion.fromVersion(lambda.ParamsAndSecretsVersions.V1_0_103, {
@@ -144,10 +169,7 @@ export class EC2InstanceRunningScheduler extends Construct {
           iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicDurableExecutionRolePolicy'),
         ],
       }),
-      logGroup: new logs.LogGroup(this, 'RunningSchedulerFunctionLogGroup', {
-        retention: logs.RetentionDays.THREE_MONTHS,
-        removalPolicy: RemovalPolicy.DESTROY,
-      }),
+      logGroup: runningScheduleFunctionLogGroup,
       loggingFormat: lambda.LoggingFormat.JSON,
       systemLogLevelV2: lambda.SystemLogLevel.INFO,
       applicationLogLevelV2: lambda.ApplicationLogLevel.INFO,
@@ -173,6 +195,12 @@ export class EC2InstanceRunningScheduler extends Construct {
     }));
     // Grant read access to the Slack secret
     slackSecret.grantRead(runningScheduleFunction);
+
+    this.failureDetection = createRunningSchedulerFailureDetection(this, 'FailureDetection', {
+      failureDetection: props.failureDetection,
+      runningScheduleFunction,
+      logGroup: runningScheduleFunctionLogGroup,
+    });
 
     // See: https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started-iac.html
     const runningScheduleFunctionAlias = runningScheduleFunction.addAlias('live');

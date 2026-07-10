@@ -1,23 +1,23 @@
 /**
- * Lambda-only environment parsing for per-instance polling limits.
+ * Lambda-only environment parsing for per-instance wait limits.
  *
  * Bundled into the running scheduler function; not imported from CDK constructs.
  */
 import { SafeEnvGetter, SafeEnvType } from 'safe-env-getter';
 import {
+  DEFAULT_RESOURCE_WAIT_LIMITS,
+  type ResourceWaitLimits,
+} from './running-scheduler-predicates';
+import {
   PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
   PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
-} from './running-scheduler-polling-config';
-import {
-  DEFAULT_RESOURCE_POLLING_LIMITS,
-  type ResourcePollingLimits,
-} from './running-scheduler-predicates';
+} from './running-scheduler-wait-config';
 
 /**
  * Ensures a parsed env integer is strictly positive.
  *
  * `SafeEnvType.Number` accepts any decimal integer (including zero and negatives);
- * polling limits require values greater than zero.
+ * wait limits require values greater than zero.
  *
  * @param key - Environment variable name used in error messages.
  * @param value - Parsed integer from {@link SafeEnvGetter.getEnvs}.
@@ -33,20 +33,20 @@ const assertPositiveEnvInt = (key: string, value: number): number => {
 };
 
 /**
- * Reads per-instance polling limits from Lambda environment variables set by the CDK construct.
+ * Reads per-instance wait limits from Lambda environment variables set by the CDK construct.
  *
- * @returns Parsed limits, using {@link DEFAULT_RESOURCE_POLLING_LIMITS} when variables are unset.
+ * @returns Parsed limits, using {@link DEFAULT_RESOURCE_WAIT_LIMITS} when variables are unset.
  * @throws {Error} When a set variable is not a positive integer.
  */
-export const parseResourcePollingLimitsFromEnv = (): ResourcePollingLimits => {
+export const parseResourceWaitLimitsFromEnv = (): ResourceWaitLimits => {
   const parsed = SafeEnvGetter.getEnvs({
     [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: [
       SafeEnvType.Number,
-      { default: DEFAULT_RESOURCE_POLLING_LIMITS.maxLoopCount },
+      { default: DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount },
     ],
     [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: [
       SafeEnvType.Number,
-      { default: DEFAULT_RESOURCE_POLLING_LIMITS.maxElapsedSeconds },
+      { default: DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds },
     ],
   });
 

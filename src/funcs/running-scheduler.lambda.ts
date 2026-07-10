@@ -18,14 +18,14 @@ import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/cl
 import { WebClient } from '@slack/web-api';
 import { secretFetcher } from 'aws-lambda-secret-fetcher';
 import { SafeEnvGetter } from 'safe-env-getter';
-import { parseResourcePollingLimitsFromEnv } from './running-scheduler-polling-env';
 import {
-  formatResourcePollingFailure,
-  getPollingAbortReason,
+  formatResourceWaitFailure,
+  getWaitAbortReason,
   isDesiredStableState,
   isTransitioningState,
-  type ResourcePollingLimits,
+  type ResourceWaitLimits,
 } from './running-scheduler-predicates';
+import { parseResourceWaitLimitsFromEnv } from './running-scheduler-wait-env';
 
 /** Mapping of EC2 instance state to display name and emoji for Slack. */
 const STATE_LIST = [
@@ -34,7 +34,7 @@ const STATE_LIST = [
 ] as const;
 
 /**
- * Seconds to wait between polling instance state after start/stop or while transitioning.
+ * Seconds to wait between describe iterations after start/stop or while transitioning.
  *
  * Used with {@link processOneResource} durable `wait` calls between describe iterations.
  */
@@ -77,19 +77,19 @@ const getStateDisplay = (current: string): { emoji: string; name: string } | und
 };
 
 /**
- * Processes one EC2 instance: describes state, issues start/stop when needed, then polls until
+ * Processes one EC2 instance: describes state, issues start/stop when needed, then waits until
  * {@link isDesiredStableState} is satisfied (durable `step` / `wait` between attempts).
  *
- * Each loop iteration checks {@link getPollingAbortReason} before describe. Failures use
- * {@link formatResourcePollingFailure} (`ResourcePollingFailed:*` message prefix).
+ * Each loop iteration checks {@link getWaitAbortReason} before describe. Failures use
+ * {@link formatResourceWaitFailure} (`ResourceWaitFailed:*` message prefix).
  *
  * @param ctx - Durable execution context (child context per instance recommended).
  * @param targetResource - EC2 instance ARN.
  * @param params - Scheduler params (`TagKey`, `TagValues`, `Mode`).
  * @param resourceIndex - Index used in durable step names for this resource.
- * @param pollingLimits - Per-instance caps from {@link parseResourcePollingLimitsFromEnv} (set by the CDK construct).
+ * @param waitLimits - Per-instance caps from {@link parseResourceWaitLimitsFromEnv} (set by the CDK construct).
  * @returns Final resource ARN, EC2 state name, parsed account, region, and instance id.
- * @throws {Error} When polling limits are exceeded (`MaxLoopCountExceeded`, `MaxElapsedTimeExceeded`),
+ * @throws {Error} When wait limits are exceeded (`MaxLoopCountExceeded`, `MaxElapsedTimeExceeded`),
  *   the instance is in an unexpected state (`UnexpectedInstanceState`), or the loop exits without a stable goal state.
  */
 const processOneResource = async (
@@ -97,7 +97,7 @@ const processOneResource = async (
   targetResource: string,
   params: SchedulerEvent['Params'],
   resourceIndex: number,
-  pollingLimits: ResourcePollingLimits,
+  waitLimits: ResourceWaitLimits,
 ): Promise<{ resource: string; status: string; account: string; region: string; identifier: string }> => {
   const parts = targetResource.split('/');
   const identifier = parts[parts.length - 1] ?? 'unknown';
@@ -112,33 +112,33 @@ const processOneResource = async (
     region,
     account,
     mode: params.Mode,
-    maxLoopCount: pollingLimits.maxLoopCount,
-    maxElapsedSeconds: pollingLimits.maxElapsedSeconds,
+    maxLoopCount: waitLimits.maxLoopCount,
+    maxElapsedSeconds: waitLimits.maxElapsedSeconds,
   });
 
-  const startedAtMs = await ctx.step(`${stepPrefix}-polling-started-at`, async () => Date.now());
+  const startedAtMs = await ctx.step(`${stepPrefix}-wait-started-at`, async () => Date.now());
 
   let loopCount = 0;
   let currentState = '';
   do {
-    const abortReason = await ctx.step(`${stepPrefix}-poll-limit-check-${loopCount}`, async () =>
-      getPollingAbortReason(loopCount, startedAtMs, Date.now(), pollingLimits),
+    const abortReason = await ctx.step(`${stepPrefix}-wait-limit-check-${loopCount}`, async () =>
+      getWaitAbortReason(loopCount, startedAtMs, Date.now(), waitLimits),
     );
     if (abortReason) {
-      const message = formatResourcePollingFailure(abortReason, {
+      const message = formatResourceWaitFailure(abortReason, {
         identifier,
         mode: params.Mode,
         currentState: currentState || 'unknown',
         loopCount,
-        limits: pollingLimits,
+        limits: waitLimits,
       });
-      ctx.logger.error('processOneResource: polling limit exceeded', {
+      ctx.logger.error('processOneResource: wait limit exceeded', {
         identifier,
         abortReason,
         loopCount,
         currentState,
-        maxLoopCount: pollingLimits.maxLoopCount,
-        maxElapsedSeconds: pollingLimits.maxElapsedSeconds,
+        maxLoopCount: waitLimits.maxLoopCount,
+        maxElapsedSeconds: waitLimits.maxElapsedSeconds,
       });
       throw new Error(message);
     }
@@ -202,12 +202,12 @@ const processOneResource = async (
         continue;
       }
 
-      const message = formatResourcePollingFailure('UnexpectedInstanceState', {
+      const message = formatResourceWaitFailure('UnexpectedInstanceState', {
         identifier,
         mode,
         currentState,
         loopCount,
-        limits: pollingLimits,
+        limits: waitLimits,
       });
       ctx.logger.error('processOneResource: unexpected state', {
         identifier,
@@ -242,16 +242,16 @@ const processOneResource = async (
  * in parallel (bounded concurrency), posts a parent Slack message and per-instance thread replies,
  * and uses durable `step` / `wait` / `map` so the run can resume across suspensions.
  *
- * Reads per-instance polling limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT` and
- * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS` via {@link parseResourcePollingLimitsFromEnv}.
+ * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT` and
+ * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS` via {@link parseResourceWaitLimitsFromEnv}.
  *
  * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
  * @param ctx - Root durable execution context.
  * @returns
  * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter.
  * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
- * @throws {Error} If `Params` is invalid, polling env vars are invalid, `SLACK_SECRET_NAME` is unset,
- *   the Slack secret is incomplete, or instance processing fails (including `ResourcePollingFailed:*` errors).
+ * @throws {Error} If `Params` is invalid, wait env vars are invalid, `SLACK_SECRET_NAME` is unset,
+ *   the Slack secret is incomplete, or instance processing fails (including `ResourceWaitFailed:*` errors).
  */
 export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: DurableContext) => {
 
@@ -267,7 +267,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
     throw new Error('Invalid event: Params.TagKey, Params.TagValues, Params.Mode are required.');
   }
 
-  const pollingLimits = parseResourcePollingLimitsFromEnv();
+  const waitLimits = parseResourceWaitLimitsFromEnv();
 
   // safe get Secrets name from environment variable
   const slackSecretName = SafeEnvGetter.getEnv('SLACK_SECRET_NAME');
@@ -312,10 +312,19 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
 
   // send slack message
   const slackParentMessageResult = await ctx.step('post-slack-messages', async () => {
-    return client.chat.postMessage({
-      channel,
-      text: `${params.Mode === 'Start' ? '😆 Starts' : '🥱 Stops'} the scheduled EC2 Instance.`,
-    });
+    try {
+      return await client.chat.postMessage({
+        channel,
+        text: `${params.Mode === 'Start' ? '😆 Starts' : '🥱 Stops'} the scheduled EC2 Instance.`,
+      });
+    } catch (error: unknown) {
+      ctx.logger.error('running-scheduler: Slack post failed', {
+        step: 'post-slack-messages',
+        channel,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   });
 
   ctx.logger.info('running-scheduler: parent Slack message posted', {
@@ -335,7 +344,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
     //   ),
     async (mapCtx: DurableContext, targetResource: string, index: number) => {
       return mapCtx.runInChildContext(`resource-${index}`, async (childCtx: DurableContext) => {
-        const result = await processOneResource(childCtx, targetResource, params, index, pollingLimits);
+        const result = await processOneResource(childCtx, targetResource, params, index, waitLimits);
         // if (result.status === 'skipped') {
         //   return result;
         // }
@@ -348,22 +357,32 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
         await childCtx.step('post-slack-child-messages', async () => {
           const display = getStateDisplay(result.status);
 
-          return client.chat.postMessage({
-            channel,
-            thread_ts: slackParentMessageResult?.ts,
-            attachments: [
-              {
-                color: '#36a64f',
-                pretext: `${display?.emoji} The status of the EC2 Instance ${result.identifier} changed to ${display?.name} due to the schedule.`,
-                fields: [
-                  { title: 'Account', value: result.account, short: true },
-                  { title: 'Region', value: result.region, short: true },
-                  { title: 'Identifier', value: result.identifier, short: true },
-                  { title: 'Status', value: (display?.name ?? 'Unknown'), short: true },
-                ],
-              },
-            ],
-          });
+          try {
+            return await client.chat.postMessage({
+              channel,
+              thread_ts: slackParentMessageResult?.ts,
+              attachments: [
+                {
+                  color: '#36a64f',
+                  pretext: `${display?.emoji} The status of the EC2 Instance ${result.identifier} changed to ${display?.name} due to the schedule.`,
+                  fields: [
+                    { title: 'Account', value: result.account, short: true },
+                    { title: 'Region', value: result.region, short: true },
+                    { title: 'Identifier', value: result.identifier, short: true },
+                    { title: 'Status', value: (display?.name ?? 'Unknown'), short: true },
+                  ],
+                },
+              ],
+            });
+          } catch (error: unknown) {
+            childCtx.logger.error('running-scheduler: Slack post failed', {
+              step: 'post-slack-child-messages',
+              channel,
+              identifier: result.identifier,
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          }
         });
         return result;
       });
