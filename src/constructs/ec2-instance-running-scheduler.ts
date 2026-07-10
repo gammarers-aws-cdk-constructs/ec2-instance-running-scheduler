@@ -165,6 +165,7 @@ export class EC2InstanceRunningScheduler extends Construct {
         ),
       },
       paramsAndSecrets: lambda.ParamsAndSecretsLayerVersion.fromVersion(lambda.ParamsAndSecretsVersions.V1_0_103, {
+        // Required by aws-lambda-secret-fetcher (extension HTTP API on localhost; port from PARAMETERS_SECRETS_EXTENSION_HTTP_PORT).
         cacheSize: 500,
         logLevel: lambda.ParamsAndSecretsLogLevel.INFO,
       }),

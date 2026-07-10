@@ -1978,12 +1978,13 @@ aws-cdk-lib@2.232.0:
     table "^6.9.0"
     yaml "1.10.2"
 
-aws-lambda-secret-fetcher@^0.3:
-  version "0.3.8"
-  resolved "https://registry.yarnpkg.com/aws-lambda-secret-fetcher/-/aws-lambda-secret-fetcher-0.3.8.tgz#5bde13739953a8da4cd80467460b577f6c7b92e2"
-  integrity sha512-QiOTMO81O75akG7ok1SQMEk/BlGPXAkA5zXFgKMYAc76VI7Pj/Jal0pkrnjqtmTwp965KUbtCY527X2QyCuArw==
+aws-lambda-secret-fetcher@^0.6.1:
+  version "0.6.1"
+  resolved "https://registry.yarnpkg.com/aws-lambda-secret-fetcher/-/aws-lambda-secret-fetcher-0.6.1.tgz#3db4b73ace756d7cf9788aaf9ad77556ceeedf84"
+  integrity sha512-59NCBy9AfsB0owvIx1qdcgbDuVXaFozgAYoScNVHEa79SM4jnIbvOxTifdbmvT8KkglTJjU/AWc72eRUSpznmQ==
   dependencies:
-    fetch-retrier "^0.1"
+    fetch-retrier "^0.3.1"
+    strict-env-resolver "^0.5.1"
 
 aws-sdk-client-mock-jest@^2:
   version "2.2.0"
@@ -3229,10 +3230,10 @@ fdir@^6.5.0:
   resolved "https://registry.yarnpkg.com/fdir/-/fdir-6.5.0.tgz#ed2ab967a331ade62f18d077dae192684d50d350"
   integrity sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==
 
-fetch-retrier@^0.1:
-  version "0.1.9"
-  resolved "https://registry.yarnpkg.com/fetch-retrier/-/fetch-retrier-0.1.9.tgz#0d72efe8d739ce952254a35f8fab9b054bcca9c1"
-  integrity sha512-bFmC2ENWOJL4K4rKX6b0/vQgu2wEXQAlZ+4utajw46WfLTgO/WViTbmtrhk6Nf9PSrVQHevZbE6ORxovHMVMXw==
+fetch-retrier@^0.3.1:
+  version "0.3.6"
+  resolved "https://registry.yarnpkg.com/fetch-retrier/-/fetch-retrier-0.3.6.tgz#6df9bc11612c67bf29e0f7a8ab1584b7fe077a9c"
+  integrity sha512-pPR697+4Bc9IgocDr0l79BPCuIJSopJw7G2dH6gMlfiUBM37aeAQn41D3tInYMn5b/6aMIRAIQ6AoEnlZA/BaA==
 
 figures@^3.2.0:
   version "3.2.0"
@@ -5887,6 +5888,11 @@ streamroller@^3.1.5:
     date-format "^4.0.14"
     debug "^4.3.4"
     fs-extra "^8.1.0"
+
+strict-env-resolver@^0.5.1:
+  version "0.5.1"
+  resolved "https://registry.yarnpkg.com/strict-env-resolver/-/strict-env-resolver-0.5.1.tgz#d70801b7bb6481dcd94da05e1b7bec27e9f4c8e9"
+  integrity sha512-Asg/+b2lDex4gZAKYwxrrrOUmztlYpWsgTyCsM3sg4cqjwB6CXGNll2cd9kwbYUWexVvunmTSMkr2xurQP/EPQ==
 
 string-length@^4.0.1:
   version "4.0.2"

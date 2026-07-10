@@ -16,7 +16,7 @@ import {
 } from '@aws-sdk/client-ec2';
 import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
 import { WebClient } from '@slack/web-api';
-import { secretFetcher } from 'aws-lambda-secret-fetcher';
+import { secretFetcher, type GetSecretValueOptions } from 'aws-lambda-secret-fetcher';
 import { SafeEnvGetter } from 'safe-env-getter';
 import {
   formatResourceWaitFailure,
@@ -39,6 +39,18 @@ const STATE_LIST = [
  * Used with {@link processOneResource} durable `wait` calls between describe iterations.
  */
 const STATUS_CHANGE_WAIT_SECONDS = 20;
+
+/**
+ * Options passed to {@link secretFetcher.getSecretValue} when loading the Slack secret.
+ *
+ * Retries cover transient extension HTTP errors (5xx, 429) and the extension
+ * "not ready to serve traffic" response during cold starts.
+ */
+const SLACK_SECRET_FETCH_OPTIONS: GetSecretValueOptions = {
+  timeoutMs: 3000,
+  retries: 5,
+  baseBackoffMs: 300,
+};
 
 /**
  * Event payload from EventBridge Scheduler invoking this Lambda.
@@ -244,6 +256,7 @@ const processOneResource = async (
  *
  * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT` and
  * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS` via {@link parseResourceWaitLimitsFromEnv}.
+ * Loads the Slack secret via {@link secretFetcher} (Parameters and Secrets Lambda Extension).
  * Slack API failures are logged as `running-scheduler: Slack post failed` for CloudWatch log filters.
  *
  * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
@@ -252,7 +265,11 @@ const processOneResource = async (
  * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter.
  * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
  * @throws {Error} If `Params` is invalid, wait env vars are invalid, `SLACK_SECRET_NAME` is unset,
- *   the Slack secret is incomplete, or instance processing fails (including `ResourceWaitFailed:*` errors).
+ *   the Slack secret is incomplete, instance processing fails (including `ResourceWaitFailed:*` errors),
+ *   or the secret cannot be read from the extension (e.g. outside Lambda or missing `AWS_SESSION_TOKEN`).
+ * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
+ * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.
+ * @throws {import('fetch-retrier').FetchRetrierAbortError} When extension requests time out after all retries.
  */
 export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: DurableContext) => {
 
@@ -275,7 +292,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
 
   const slackSecretValue = await ctx.step('fetch-slack-secret', async () => {
     ctx.logger.info('running-scheduler: fetching Slack secret', { secretName: slackSecretName });
-    return secretFetcher.getSecretValue<SlackSecret>(slackSecretName);
+    return secretFetcher.getSecretValue<SlackSecret>(slackSecretName, SLACK_SECRET_FETCH_OPTIONS);
   });
 
   ctx.logger.info('running-scheduler: Slack secret loaded');
