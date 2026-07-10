@@ -1,9 +1,9 @@
+import { DEFAULT_RESOURCE_WAIT_LIMITS } from '../src/funcs/running-scheduler-predicates';
 import {
   PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
   PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
-} from '../src/funcs/running-scheduler-polling-config';
-import { parseResourcePollingLimitsFromEnv } from '../src/funcs/running-scheduler-polling-env';
-import { DEFAULT_RESOURCE_POLLING_LIMITS } from '../src/funcs/running-scheduler-predicates';
+} from '../src/funcs/running-scheduler-wait-config';
+import { parseResourceWaitLimitsFromEnv } from '../src/funcs/running-scheduler-wait-env';
 
 const savedEnv = { ...process.env };
 
@@ -29,14 +29,14 @@ const withEnv = (overrides: Record<string, string | undefined>, fn: () => void):
   }
 };
 
-describe('parseResourcePollingLimitsFromEnv', () => {
+describe('parseResourceWaitLimitsFromEnv', () => {
   afterEach(() => {
     restoreEnv();
   });
 
   it('uses defaults when env vars are unset', () => {
     withEnv({}, () => {
-      expect(parseResourcePollingLimitsFromEnv()).toEqual(DEFAULT_RESOURCE_POLLING_LIMITS);
+      expect(parseResourceWaitLimitsFromEnv()).toEqual(DEFAULT_RESOURCE_WAIT_LIMITS);
     });
   });
 
@@ -47,7 +47,7 @@ describe('parseResourcePollingLimitsFromEnv', () => {
         [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: '600',
       },
       () => {
-        expect(parseResourcePollingLimitsFromEnv()).toEqual({ maxLoopCount: 10, maxElapsedSeconds: 600 });
+        expect(parseResourceWaitLimitsFromEnv()).toEqual({ maxLoopCount: 10, maxElapsedSeconds: 600 });
       },
     );
   });
@@ -58,7 +58,7 @@ describe('parseResourcePollingLimitsFromEnv', () => {
         [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: '0',
       },
       () => {
-        expect(() => parseResourcePollingLimitsFromEnv()).toThrow(/PROCESS_RESOURCE_MAX_LOOP_COUNT/);
+        expect(() => parseResourceWaitLimitsFromEnv()).toThrow(/PROCESS_RESOURCE_MAX_LOOP_COUNT/);
       },
     );
   });
@@ -69,7 +69,7 @@ describe('parseResourcePollingLimitsFromEnv', () => {
         [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: '-1',
       },
       () => {
-        expect(() => parseResourcePollingLimitsFromEnv()).toThrow(/PROCESS_RESOURCE_MAX_ELAPSED_SECONDS/);
+        expect(() => parseResourceWaitLimitsFromEnv()).toThrow(/PROCESS_RESOURCE_MAX_ELAPSED_SECONDS/);
       },
     );
   });
@@ -80,9 +80,9 @@ describe('parseResourcePollingLimitsFromEnv', () => {
         [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: '15',
       },
       () => {
-        expect(parseResourcePollingLimitsFromEnv()).toEqual({
+        expect(parseResourceWaitLimitsFromEnv()).toEqual({
           maxLoopCount: 15,
-          maxElapsedSeconds: DEFAULT_RESOURCE_POLLING_LIMITS.maxElapsedSeconds,
+          maxElapsedSeconds: DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds,
         });
       },
     );
