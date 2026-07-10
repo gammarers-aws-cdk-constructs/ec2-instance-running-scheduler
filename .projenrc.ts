@@ -21,7 +21,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
     'aws-lambda-secret-fetcher@^0.6.1',
     'aws-sdk-client-mock@^2',
     'aws-sdk-client-mock-jest@^2',
-    'safe-env-getter@^0.3.3',
+    'strict-env-resolver@^0.5.1',
   ],
   releaseToNpm: true,
   npmTrustedPublishing: true,

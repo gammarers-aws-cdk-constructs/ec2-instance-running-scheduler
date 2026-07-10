@@ -3,7 +3,7 @@
  *
  * Bundled into the running scheduler function; not imported from CDK constructs.
  */
-import { SafeEnvGetter, SafeEnvType } from 'safe-env-getter';
+import { StrictEnvResolver, StrictEnvType } from 'strict-env-resolver';
 import {
   DEFAULT_RESOURCE_WAIT_LIMITS,
   type ResourceWaitLimits,
@@ -16,11 +16,11 @@ import {
 /**
  * Ensures a parsed env integer is strictly positive.
  *
- * `SafeEnvType.Number` accepts any decimal integer (including zero and negatives);
+ * `StrictEnvType.Number` accepts any finite number (including zero and negatives);
  * wait limits require values greater than zero.
  *
  * @param key - Environment variable name used in error messages.
- * @param value - Parsed integer from {@link SafeEnvGetter.getEnvs}.
+ * @param value - Parsed number from {@link StrictEnvResolver.resolveAll}.
  * @returns `value` when it is greater than zero.
  * @throws {Error} When `value` is zero or negative.
  */
@@ -36,16 +36,17 @@ const assertPositiveEnvInt = (key: string, value: number): number => {
  * Reads per-instance wait limits from Lambda environment variables set by the CDK construct.
  *
  * @returns Parsed limits, using {@link DEFAULT_RESOURCE_WAIT_LIMITS} when variables are unset.
- * @throws {Error} When a set variable is not a positive integer.
+ * @throws {import('strict-env-resolver').StrictEnvValidationError} When a set variable is not a finite number.
+ * @throws {Error} When a set variable is zero or negative.
  */
 export const parseResourceWaitLimitsFromEnv = (): ResourceWaitLimits => {
-  const parsed = SafeEnvGetter.getEnvs({
+  const parsed = StrictEnvResolver.resolveAll({
     [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: [
-      SafeEnvType.Number,
+      StrictEnvType.Number,
       { default: DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount },
     ],
     [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: [
-      SafeEnvType.Number,
+      StrictEnvType.Number,
       { default: DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds },
     ],
   });

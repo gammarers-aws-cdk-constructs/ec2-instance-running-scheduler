@@ -17,7 +17,7 @@ import {
 import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
 import { WebClient } from '@slack/web-api';
 import { secretFetcher, type GetSecretValueOptions } from 'aws-lambda-secret-fetcher';
-import { SafeEnvGetter } from 'safe-env-getter';
+import { StrictEnvResolver, StrictEnvType } from 'strict-env-resolver';
 import {
   formatResourceWaitFailure,
   getWaitAbortReason,
@@ -264,9 +264,10 @@ const processOneResource = async (
  * @returns
  * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter.
  * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
- * @throws {Error} If `Params` is invalid, wait env vars are invalid, `SLACK_SECRET_NAME` is unset,
+ * @throws {Error} If `Params` is invalid, wait env vars are not positive integers,
  *   the Slack secret is incomplete, instance processing fails (including `ResourceWaitFailed:*` errors),
  *   or the secret cannot be read from the extension (e.g. outside Lambda or missing `AWS_SESSION_TOKEN`).
+ * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not valid numbers.
  * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
  * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.
  * @throws {import('fetch-retrier').FetchRetrierAbortError} When extension requests time out after all retries.
@@ -287,8 +288,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
 
   const waitLimits = parseResourceWaitLimitsFromEnv();
 
-  // safe get Secrets name from environment variable
-  const slackSecretName = SafeEnvGetter.getEnv('SLACK_SECRET_NAME');
+  const slackSecretName = StrictEnvResolver.resolve('SLACK_SECRET_NAME', StrictEnvType.String);
 
   const slackSecretValue = await ctx.step('fetch-slack-secret', async () => {
     ctx.logger.info('running-scheduler: fetching Slack secret', { secretName: slackSecretName });
