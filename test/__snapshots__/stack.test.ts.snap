@@ -90,7 +90,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "392501ef2349214af0f62a8d83b8a9f44411520e361860da2814a4a566ecaeab.zip",
+          "S3Key": "eaea24d3e93e51482d58cc59591bcc0c32be116c0a323c155730e5562bdfd029.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -105,8 +105,10 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
             "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
             "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
             "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
+            "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
             "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
             "SECRETS_MANAGER_TTL": "300",
             "SLACK_SECRET_NAME": "test/slack-webhook",
@@ -153,7 +155,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601195aa6d056ab2be79ecdfe277cca8442",
             "Version",
           ],
         },
@@ -161,7 +163,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601195aa6d056ab2be79ecdfe277cca8442": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -204,7 +206,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -245,14 +247,45 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
               "Sid": "GetResources",
             },
             {
+              "Action": "ec2:DescribeInstances",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2DescribeInstances",
+            },
+            {
               "Action": [
-                "ec2:DescribeInstances",
                 "ec2:StartInstances",
                 "ec2:StopInstances",
               ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:ResourceTag/WorkHoursRunning": [
+                    "YES",
+                  ],
+                },
+              },
               "Effect": "Allow",
-              "Resource": "*",
-              "Sid": "Ec2RunningControl",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ec2:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":instance/*",
+                  ],
+                ],
+              },
+              "Sid": "Ec2StartStopTaggedInstances",
             },
             {
               "Action": [
@@ -537,7 +570,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "392501ef2349214af0f62a8d83b8a9f44411520e361860da2814a4a566ecaeab.zip",
+          "S3Key": "eaea24d3e93e51482d58cc59591bcc0c32be116c0a323c155730e5562bdfd029.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -552,8 +585,10 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
             "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
             "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
             "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
+            "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
             "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
             "SECRETS_MANAGER_TTL": "300",
             "SLACK_SECRET_NAME": "test/slack-webhook",
@@ -600,7 +635,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601195aa6d056ab2be79ecdfe277cca8442",
             "Version",
           ],
         },
@@ -608,7 +643,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601195aa6d056ab2be79ecdfe277cca8442": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -651,7 +686,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -692,14 +727,45 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
               "Sid": "GetResources",
             },
             {
+              "Action": "ec2:DescribeInstances",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2DescribeInstances",
+            },
+            {
               "Action": [
-                "ec2:DescribeInstances",
                 "ec2:StartInstances",
                 "ec2:StopInstances",
               ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:ResourceTag/WorkHoursRunning": [
+                    "YES",
+                  ],
+                },
+              },
               "Effect": "Allow",
-              "Resource": "*",
-              "Sid": "Ec2RunningControl",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ec2:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":instance/*",
+                  ],
+                ],
+              },
+              "Sid": "Ec2StartStopTaggedInstances",
             },
             {
               "Action": [
@@ -984,7 +1050,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "392501ef2349214af0f62a8d83b8a9f44411520e361860da2814a4a566ecaeab.zip",
+          "S3Key": "eaea24d3e93e51482d58cc59591bcc0c32be116c0a323c155730e5562bdfd029.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -999,8 +1065,10 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
             "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
             "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
             "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
+            "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
             "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
             "SECRETS_MANAGER_TTL": "300",
             "SLACK_SECRET_NAME": "test/slack-webhook",
@@ -1047,7 +1115,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601195aa6d056ab2be79ecdfe277cca8442",
             "Version",
           ],
         },
@@ -1055,7 +1123,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601195aa6d056ab2be79ecdfe277cca8442": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -1098,7 +1166,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -1139,14 +1207,45 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
               "Sid": "GetResources",
             },
             {
+              "Action": "ec2:DescribeInstances",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2DescribeInstances",
+            },
+            {
               "Action": [
-                "ec2:DescribeInstances",
                 "ec2:StartInstances",
                 "ec2:StopInstances",
               ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:ResourceTag/WorkHoursRunning": [
+                    "YES",
+                  ],
+                },
+              },
               "Effect": "Allow",
-              "Resource": "*",
-              "Sid": "Ec2RunningControl",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ec2:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":instance/*",
+                  ],
+                ],
+              },
+              "Sid": "Ec2StartStopTaggedInstances",
             },
             {
               "Action": [

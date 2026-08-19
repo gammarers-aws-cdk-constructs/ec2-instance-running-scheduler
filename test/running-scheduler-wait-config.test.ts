@@ -1,11 +1,20 @@
-import { DEFAULT_RESOURCE_WAIT_LIMITS } from '../src/funcs/running-scheduler-predicates';
+import { DEFAULT_MAX_CONCURRENCY, DEFAULT_RESOURCE_WAIT_LIMITS } from '../src/funcs/running-scheduler-predicates';
 import {
   PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
   PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
+  PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
+  PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
 } from '../src/funcs/running-scheduler-wait-config';
-import { parseResourceWaitLimitsFromEnv } from '../src/funcs/running-scheduler-wait-env';
+import { parseMaxConcurrencyFromEnv, parseResourceWaitLimitsFromEnv } from '../src/funcs/running-scheduler-wait-env';
 
 const savedEnv = { ...process.env };
+
+const HANDLER_ENV_KEYS = [
+  PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
+  PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
+  PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
+  PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
+] as const;
 
 const restoreEnv = (): void => {
   process.env = { ...savedEnv };
@@ -13,8 +22,9 @@ const restoreEnv = (): void => {
 
 const withEnv = (overrides: Record<string, string | undefined>, fn: () => void): void => {
   restoreEnv();
-  delete process.env[PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV];
-  delete process.env[PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV];
+  for (const key of HANDLER_ENV_KEYS) {
+    delete process.env[key];
+  }
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined) {
       delete process.env[key];
@@ -45,9 +55,14 @@ describe('parseResourceWaitLimitsFromEnv', () => {
       {
         [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: '10',
         [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: '600',
+        [PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV]: '5',
       },
       () => {
-        expect(parseResourceWaitLimitsFromEnv()).toEqual({ maxLoopCount: 10, maxElapsedSeconds: 600 });
+        expect(parseResourceWaitLimitsFromEnv()).toEqual({
+          maxLoopCount: 10,
+          maxElapsedSeconds: 600,
+          statusChangeWaitSeconds: 5,
+        });
       },
     );
   });
@@ -56,6 +71,17 @@ describe('parseResourceWaitLimitsFromEnv', () => {
     withEnv(
       {
         [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: '0',
+      },
+      () => {
+        expect(() => parseResourceWaitLimitsFromEnv()).toThrow(/PROCESS_RESOURCE_MAX_LOOP_COUNT/);
+      },
+    );
+  });
+
+  it('throws on non-integer maxLoopCount', () => {
+    withEnv(
+      {
+        [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: '1.5',
       },
       () => {
         expect(() => parseResourceWaitLimitsFromEnv()).toThrow(/PROCESS_RESOURCE_MAX_LOOP_COUNT/);
@@ -74,6 +100,17 @@ describe('parseResourceWaitLimitsFromEnv', () => {
     );
   });
 
+  it('throws on invalid statusChangeWaitSeconds', () => {
+    withEnv(
+      {
+        [PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV]: '0',
+      },
+      () => {
+        expect(() => parseResourceWaitLimitsFromEnv()).toThrow(/PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS/);
+      },
+    );
+  });
+
   it('uses default for unset var when the other is set', () => {
     withEnv(
       {
@@ -83,7 +120,42 @@ describe('parseResourceWaitLimitsFromEnv', () => {
         expect(parseResourceWaitLimitsFromEnv()).toEqual({
           maxLoopCount: 15,
           maxElapsedSeconds: DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds,
+          statusChangeWaitSeconds: DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds,
         });
+      },
+    );
+  });
+});
+
+describe('parseMaxConcurrencyFromEnv', () => {
+  afterEach(() => {
+    restoreEnv();
+  });
+
+  it('uses default when env var is unset', () => {
+    withEnv({}, () => {
+      expect(parseMaxConcurrencyFromEnv()).toBe(DEFAULT_MAX_CONCURRENCY);
+    });
+  });
+
+  it('parses custom concurrency', () => {
+    withEnv(
+      {
+        [PROCESS_RESOURCES_MAX_CONCURRENCY_ENV]: '25',
+      },
+      () => {
+        expect(parseMaxConcurrencyFromEnv()).toBe(25);
+      },
+    );
+  });
+
+  it('throws on invalid maxConcurrency', () => {
+    withEnv(
+      {
+        [PROCESS_RESOURCES_MAX_CONCURRENCY_ENV]: '0',
+      },
+      () => {
+        expect(() => parseMaxConcurrencyFromEnv()).toThrow(/PROCESS_RESOURCES_MAX_CONCURRENCY/);
       },
     );
   });

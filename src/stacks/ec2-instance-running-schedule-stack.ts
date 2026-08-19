@@ -5,7 +5,8 @@ import { EC2InstanceRunningScheduler, TargetResource, Secrets, Schedule, type Fa
 /**
  * Props for the EC2 instance running schedule CDK stack.
  *
- * @see {@link EC2InstanceRunningSchedulerProps} for construct-level options not exposed here (e.g. `resourceWait`).
+ * @see {@link EC2InstanceRunningSchedulerProps} for construct-level options not exposed here
+ * (e.g. `resourceWait`, `runtime`, `durable`, `logGroup`).
  */
 export interface EC2InstanceRunningScheduleStackProps extends StackProps {
   /** Tag-based target resource for EC2 instances to start/stop. */
@@ -26,8 +27,10 @@ export interface EC2InstanceRunningScheduleStackProps extends StackProps {
  * CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
  *
  * Wires {@link EC2InstanceRunningScheduler} with targeting, schedules, secrets, scheduling toggle,
- * and optional {@link FailureDetectionAlarms}. Does not expose {@link ResourceWaitLimits}; use the
- * construct directly when custom per-instance wait limits are required.
+ * and optional {@link FailureDetectionAlarms}. Does not expose {@link ResourceWaitLimits},
+ * {@link RunningSchedulerRuntimeProps}, {@link RunningSchedulerDurableProps}, or
+ * {@link RunningSchedulerLogGroupProps}; use the construct directly when custom runtime,
+ * wait, durable, or log group settings are required.
  */
 export class EC2InstanceRunningScheduleStack extends Stack {
   /**
