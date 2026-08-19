@@ -206,7 +206,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -247,14 +247,45 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
               "Sid": "GetResources",
             },
             {
+              "Action": "ec2:DescribeInstances",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2DescribeInstances",
+            },
+            {
               "Action": [
-                "ec2:DescribeInstances",
                 "ec2:StartInstances",
                 "ec2:StopInstances",
               ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:ResourceTag/WorkHoursRunning": [
+                    "YES",
+                  ],
+                },
+              },
               "Effect": "Allow",
-              "Resource": "*",
-              "Sid": "Ec2RunningControl",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ec2:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":instance/*",
+                  ],
+                ],
+              },
+              "Sid": "Ec2StartStopTaggedInstances",
             },
             {
               "Action": [
@@ -655,7 +686,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -696,14 +727,45 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
               "Sid": "GetResources",
             },
             {
+              "Action": "ec2:DescribeInstances",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2DescribeInstances",
+            },
+            {
               "Action": [
-                "ec2:DescribeInstances",
                 "ec2:StartInstances",
                 "ec2:StopInstances",
               ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:ResourceTag/WorkHoursRunning": [
+                    "YES",
+                  ],
+                },
+              },
               "Effect": "Allow",
-              "Resource": "*",
-              "Sid": "Ec2RunningControl",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ec2:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":instance/*",
+                  ],
+                ],
+              },
+              "Sid": "Ec2StartStopTaggedInstances",
             },
             {
               "Action": [
@@ -1104,7 +1166,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -1145,14 +1207,45 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
               "Sid": "GetResources",
             },
             {
+              "Action": "ec2:DescribeInstances",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "Ec2DescribeInstances",
+            },
+            {
               "Action": [
-                "ec2:DescribeInstances",
                 "ec2:StartInstances",
                 "ec2:StopInstances",
               ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:ResourceTag/WorkHoursRunning": [
+                    "YES",
+                  ],
+                },
+              },
               "Effect": "Allow",
-              "Resource": "*",
-              "Sid": "Ec2RunningControl",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ec2:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":instance/*",
+                  ],
+                ],
+              },
+              "Sid": "Ec2StartStopTaggedInstances",
             },
             {
               "Action": [

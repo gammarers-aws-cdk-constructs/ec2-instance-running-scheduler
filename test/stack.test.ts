@@ -1,5 +1,5 @@
 import { App, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack } from '../src';
@@ -74,6 +74,48 @@ describe('EC2InstanceRunningScheduleStack', () => {
       template.hasResourceProperties('AWS::Scheduler::Schedule', {
         ScheduleExpression: 'cron(5 19 ? * MON-FRI *)',
         ScheduleExpressionTimezone: 'Etc/UTC',
+      });
+    });
+
+    it('Should scope start/stop IAM to tagged instances in this account and region', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'GetResources',
+              Action: 'tag:GetResources',
+              Resource: '*',
+            }),
+            Match.objectLike({
+              Sid: 'Ec2DescribeInstances',
+              Action: 'ec2:DescribeInstances',
+              Resource: '*',
+            }),
+            Match.objectLike({
+              Sid: 'Ec2StartStopTaggedInstances',
+              Action: ['ec2:StartInstances', 'ec2:StopInstances'],
+              Resource: {
+                'Fn::Join': [
+                  '',
+                  [
+                    'arn:',
+                    { Ref: 'AWS::Partition' },
+                    ':ec2:',
+                    { Ref: 'AWS::Region' },
+                    ':',
+                    { Ref: 'AWS::AccountId' },
+                    ':instance/*',
+                  ],
+                ],
+              },
+              Condition: {
+                StringEquals: {
+                  'aws:ResourceTag/WorkHoursRunning': ['YES'],
+                },
+              },
+            }),
+          ]),
+        },
       });
     });
 
@@ -178,6 +220,66 @@ describe('EC2InstanceRunningScheduler resourceWait', () => {
         },
       },
     });
+  });
+});
+
+describe('EC2InstanceRunningScheduler IAM', () => {
+  it('applies aws:ResourceTag for each configured tag value', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      targetResource: {
+        tagKey: 'Schedule',
+        tagValues: ['YES', 'ALWAYS'],
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Sid: 'Ec2StartStopTaggedInstances',
+            Condition: {
+              StringEquals: {
+                'aws:ResourceTag/Schedule': ['YES', 'ALWAYS'],
+              },
+            },
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('throws when tagKey is empty', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+
+    expect(() => {
+      new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+        ...baseProps,
+        targetResource: {
+          tagKey: '',
+          tagValues: ['YES'],
+        },
+      });
+    }).toThrow(/tagKey/);
+  });
+
+  it('throws when tagValues is empty', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+
+    expect(() => {
+      new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+        ...baseProps,
+        targetResource: {
+          tagKey: 'Schedule',
+          tagValues: [],
+        },
+      });
+    }).toThrow(/tagValues/);
   });
 });
 

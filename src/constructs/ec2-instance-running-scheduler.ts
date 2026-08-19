@@ -1,4 +1,4 @@
-import { Duration, RemovalPolicy, TimeZone } from 'aws-cdk-lib';
+import { ArnFormat, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -45,6 +45,10 @@ export interface Schedule {
 
 /**
  * Defines which EC2 instances are targeted by tag key and values.
+ *
+ * Instances must already have this tag. IAM allows `ec2:StartInstances` /
+ * `ec2:StopInstances` only on instances in the stack account and region whose
+ * `aws:ResourceTag/<tagKey>` matches one of {@link TargetResource.tagValues}.
  */
 export interface TargetResource {
   /** Tag key used to select instances (e.g. Schedule). */
@@ -234,6 +238,60 @@ const resolvePositiveInteger = (name: string, value: number | undefined, default
 };
 
 /**
+ * Ensures {@link TargetResource} can be used in IAM `aws:ResourceTag` conditions.
+ *
+ * @param targetResource - Tag key and values used to select EC2 instances.
+ * @throws {Error} When `tagKey` is empty or `tagValues` is empty.
+ */
+const assertTargetResourceForIam = (targetResource: TargetResource): void => {
+  if (targetResource.tagKey === '') {
+    throw new Error('targetResource.tagKey must be a non-empty string');
+  }
+  if (targetResource.tagValues.length === 0) {
+    throw new Error('targetResource.tagValues must contain at least one value');
+  }
+};
+
+/**
+ * IAM statement that allows start/stop only on EC2 instances in this account and region
+ * whose tags match {@link TargetResource}.
+ *
+ * `tag:GetResources` and `ec2:DescribeInstances` cannot use resource-level ARNs or
+ * resource-tag conditions (AWS API limitation). Start/stop are scoped instead so a
+ * compromised function cannot start or stop untagged instances.
+ *
+ * @param scope - Construct used to resolve the stack ARN partition, region, and account.
+ * @param targetResource - Tag key and values required on target instances.
+ * @returns Policy statement for `ec2:StartInstances` and `ec2:StopInstances`.
+ */
+const taggedInstanceStartStopStatement = (
+  scope: Construct,
+  targetResource: TargetResource,
+): iam.PolicyStatement => {
+  const instanceArn = Stack.of(scope).formatArn({
+    service: 'ec2',
+    resource: 'instance',
+    resourceName: '*',
+    arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+  });
+
+  return new iam.PolicyStatement({
+    sid: 'Ec2StartStopTaggedInstances',
+    effect: iam.Effect.ALLOW,
+    actions: [
+      'ec2:StartInstances',
+      'ec2:StopInstances',
+    ],
+    resources: [instanceArn],
+    conditions: {
+      StringEquals: {
+        [`aws:ResourceTag/${targetResource.tagKey}`]: targetResource.tagValues,
+      },
+    },
+  });
+};
+
+/**
  * Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
  *
  * Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
@@ -243,7 +301,8 @@ const resolvePositiveInteger = (name: string, value: number | undefined, default
  * and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
  * and map concurrency are set via {@link EC2InstanceRunningSchedulerProps.runtime}; Durable
  * execution timeout and history retention via {@link EC2InstanceRunningSchedulerProps.durable};
- * log retention via {@link EC2InstanceRunningSchedulerProps.logGroup}. Optional CloudWatch failure
+ * log retention via {@link EC2InstanceRunningSchedulerProps.logGroup}. Start/stop IAM is limited
+ * to instances tagged as {@link TargetResource}. Optional CloudWatch failure
  * detection is available via {@link EC2InstanceRunningSchedulerProps.failureDetection}.
  */
 export class EC2InstanceRunningScheduler extends Construct {
@@ -263,6 +322,8 @@ export class EC2InstanceRunningScheduler extends Construct {
    */
   constructor(scope: Construct, id: string, props: EC2InstanceRunningSchedulerProps) {
     super(scope, id);
+
+    assertTargetResourceForIam(props.targetResource);
 
     const slackSecret = Secret.fromSecretNameV2(this, 'SlackSecret', props.secrets.slackSecretName);
 
@@ -322,7 +383,7 @@ export class EC2InstanceRunningScheduler extends Construct {
         logLevel: lambda.ParamsAndSecretsLogLevel.INFO,
       }),
       role: new iam.Role(this, 'RunningSchedulerFunctionRole', {
-        description: 'Allows the running scheduler to describe, start, and stop EC2 instances and read Slack secrets.',
+        description: 'Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.',
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
@@ -340,19 +401,21 @@ export class EC2InstanceRunningScheduler extends Construct {
       actions: [
         'tag:GetResources',
       ],
+      // Resource Groups Tagging API does not support resource-level permissions.
       resources: ['*'],
     }));
-    // EC2: describe instances and start/stop by instance id
     runningScheduleFunction.addToRolePolicy(new iam.PolicyStatement({
-      sid: 'Ec2RunningControl',
+      sid: 'Ec2DescribeInstances',
       effect: iam.Effect.ALLOW,
       actions: [
         'ec2:DescribeInstances',
-        'ec2:StartInstances',
-        'ec2:StopInstances',
       ],
+      // Describe* APIs do not support resource-level permissions or resource-tag conditions.
       resources: ['*'],
     }));
+    runningScheduleFunction.addToRolePolicy(
+      taggedInstanceStartStopStatement(this, props.targetResource),
+    );
     // Grant read access to the Slack secret
     slackSecret.grantRead(runningScheduleFunction);
 
