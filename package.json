@@ -50,7 +50,7 @@
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
     "aws-cdk-lib": "2.232.0",
-    "aws-lambda-secret-fetcher": "^0.6.1",
+    "aws-lambda-secret-fetcher": "^0.7.2",
     "aws-sdk-client-mock": "^2.2.0",
     "aws-sdk-client-mock-jest": "^2.2.0",
     "commit-and-tag-version": "^12",

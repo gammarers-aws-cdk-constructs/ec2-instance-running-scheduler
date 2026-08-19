@@ -71,6 +71,31 @@ interface SlackSecret {
 }
 
 /**
+ * Whether a secret payload is a JSON object with non-empty Slack `token` and `channel`.
+ *
+ * `aws-lambda-secret-fetcher` ^0.7 parses JSON with quiet-json-parser; invalid or empty
+ * JSON falls back to the original string instead of throwing.
+ *
+ * @param value - Value returned by {@link secretFetcher.getSecretValue}.
+ * @returns `true` when `value` is a {@link SlackSecret}.
+ */
+const isSlackSecret = (value: unknown): value is SlackSecret => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  if (!('token' in value) || !('channel' in value)) {
+    return false;
+  }
+  if (typeof value.token !== 'string' || value.token === '') {
+    return false;
+  }
+  if (typeof value.channel !== 'string' || value.channel === '') {
+    return false;
+  }
+  return true;
+};
+
+/**
  * Returns display name and emoji for an EC2 instance state.
  *
  * @param current - Current instance state (e.g. 'running', 'stopped').
@@ -261,12 +286,14 @@ const processOneResource = async (
  * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter.
  * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
  * @throws {Error} If `Params` is invalid, wait env vars or max concurrency are not positive integers,
- *   the Slack secret is incomplete, instance processing fails (including `ResourceWaitFailed:*` errors),
+ *   the Slack secret is incomplete or not JSON with `token` and `channel`,
+ *   instance processing fails (including `ResourceWaitFailed:*` errors),
  *   or the secret cannot be read from the extension (e.g. outside Lambda or missing `AWS_SESSION_TOKEN`).
  * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not valid numbers.
  * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
  * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.
  * @throws {import('fetch-retrier').FetchRetrierAbortError} When extension requests time out after all retries.
+ * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} When secret-fetch retry options are invalid.
  */
 export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: DurableContext) => {
 
@@ -287,14 +314,14 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
 
   const slackSecretName = StrictEnvResolver.resolve('SLACK_SECRET_NAME', StrictEnvType.String);
 
-  const slackSecretValue = await ctx.step('fetch-slack-secret', async () => {
+  const slackSecretValue: unknown = await ctx.step('fetch-slack-secret', async () => {
     ctx.logger.info('running-scheduler: fetching Slack secret', { secretName: slackSecretName });
-    return secretFetcher.getSecretValue<SlackSecret>(slackSecretName, SLACK_SECRET_FETCH_OPTIONS);
+    return secretFetcher.getSecretValue(slackSecretName, SLACK_SECRET_FETCH_OPTIONS);
   });
 
   ctx.logger.info('running-scheduler: Slack secret loaded');
 
-  if (!slackSecretValue?.token || !slackSecretValue?.channel) {
+  if (!isSlackSecret(slackSecretValue)) {
     throw new Error('Slack secret must contain token and channel.');
   }
 
