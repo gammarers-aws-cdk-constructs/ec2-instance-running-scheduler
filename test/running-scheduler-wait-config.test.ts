@@ -78,6 +78,17 @@ describe('parseResourceWaitLimitsFromEnv', () => {
     );
   });
 
+  it('throws on non-integer maxLoopCount', () => {
+    withEnv(
+      {
+        [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: '1.5',
+      },
+      () => {
+        expect(() => parseResourceWaitLimitsFromEnv()).toThrow(/PROCESS_RESOURCE_MAX_LOOP_COUNT/);
+      },
+    );
+  });
+
   it('throws on invalid maxElapsedSeconds', () => {
     withEnv(
       {

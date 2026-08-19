@@ -18,7 +18,7 @@ AWS CDK construct library that starts and stops EC2 instances on a cron schedule
 - **Configurable wait limits** – Per-instance **max loop count**, **max elapsed time**, and **status-change wait interval** via `resourceWait` (default: 90 loops / 1800 seconds / 20 seconds). Failures use explicit `ResourceWaitFailed:*` messages instead of running until the Durable execution timeout (construct default: 2 hours; override with `durable.executionTimeout`).
 - **Configurable Lambda runtime** – Memory, invoke timeout, and bounded instance concurrency via `runtime` (default: **512 MB** / **15 minutes** / **maxConcurrency 10**). Durable execution timeout and history retention via `durable` (default: **2 hours** / **1 day**).
 - **Configurable logs** – Log group retention and removal policy via `logGroup` (default: **3 months**, `RemovalPolicy.DESTROY`).
-- **Validated environment variables** – The bundled handler parses env vars with **strict-env-resolver** (`StrictEnvResolver`). `SLACK_SECRET_NAME` is required; wait limits and `maxConcurrency` must be **finite positive numbers** (`> 0`).
+- **Validated environment variables** – The bundled handler parses env vars with **strict-env-resolver** (`StrictEnvResolver`). `SLACK_SECRET_NAME` is required; wait limits and `maxConcurrency` must be **positive integers** (`>= 1`).
 - **Slack notifications** – Parent message plus threaded updates per instance; credentials from Secrets Manager JSON (`token`, `channel`). The construct sets **`SLACK_SECRET_NAME`** on the function.
 - **Structured logging** – Durable execution **`ctx.logger`** for traceable JSON application logs (invocation, describe/start/stop/wait loops, wait limit errors, Slack steps, completion).
 - **Optional failure detection** – CloudWatch alarms and log-based metrics for Lambda errors, instance wait failures (`ResourceWaitFailed`), Slack post failures, and other handler `ERROR` logs. Optional SNS notifications via a caller-supplied topic (`failureDetection.alarmTopic`).
@@ -183,7 +183,7 @@ EventBridge Scheduler invokes the Lambda with `Params.TagKey`, `Params.TagValues
 | `PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS` | `resourceWait.statusChangeWaitSeconds` (default `20`) | Seconds between describe/wait iterations |
 | `PROCESS_RESOURCES_MAX_CONCURRENCY` | `runtime.maxConcurrency` (default `10`) | Max instances processed in parallel |
 
-When you set wait limits via `resourceWait` or concurrency via `runtime.maxConcurrency`, the construct writes them as decimal integer strings. At invocation the handler parses them with **strict-env-resolver**; each value must be a **finite number greater than zero**. Missing `SLACK_SECRET_NAME` or invalid env values cause `StrictEnvValidationError` at the start of an invocation.
+When you set wait limits via `resourceWait` or concurrency via `runtime.maxConcurrency`, the construct writes them as decimal integer strings. At invocation the handler parses them with **strict-env-resolver**; each value must be a **positive integer** (`>= 1`). Missing `SLACK_SECRET_NAME` or invalid env values cause `StrictEnvValidationError` at the start of an invocation.
 
 ## Options
 
@@ -274,7 +274,7 @@ Custom metrics are published under the `EC2InstanceRunningScheduler` namespace. 
 
 - **Node.js** ≥ 20.0.0 (for developing or synthesizing CDK apps that depend on this package).
 - **aws-cdk-lib** ^2.232.0 and **constructs** ^10.5.1 (peer dependencies).
-- **AWS** – EventBridge Scheduler; Lambda with **Durable Execution** (Node.js **24.x** runtime in the construct; Durable Execution requires a supported Node.js runtime in your region), a **live alias**, **Parameters and Secrets Lambda Extension**; EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`); Secrets Manager. The deployed function uses **arm64**, Durable Execution IAM policies, a 2-hour Durable execution timeout (construct default), and a bundled handler that loads secrets via **aws-lambda-secret-fetcher** (^0.7) and parses env vars via **strict-env-resolver** (^0.5). Secret fetch runs only inside Lambda (requires runtime `AWS_SESSION_TOKEN` and the extension layer); the library retries transient extension errors including cold-start "not ready" responses.
+- **AWS** – EventBridge Scheduler; Lambda with **Durable Execution** (Node.js **24.x** runtime in the construct; Durable Execution requires a supported Node.js runtime in your region), a **live alias**, **Parameters and Secrets Lambda Extension**; EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`); Secrets Manager. The deployed function uses **arm64**, Durable Execution IAM policies, a 2-hour Durable execution timeout (construct default), and a bundled handler that loads secrets via **aws-lambda-secret-fetcher** (^0.7) and parses env vars via **strict-env-resolver** (^0.6). Secret fetch runs only inside Lambda (requires runtime `AWS_SESSION_TOKEN` and the extension layer); the library retries transient extension errors including cold-start "not ready" responses.
 
 ## License
 
