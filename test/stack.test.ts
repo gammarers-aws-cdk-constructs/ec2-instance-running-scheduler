@@ -1,5 +1,6 @@
-import { App, Stack, TimeZone } from 'aws-cdk-lib';
+import { App, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack } from '../src';
 
@@ -33,14 +34,32 @@ describe('EC2InstanceRunningScheduleStack', () => {
       template.resourceCountIs('AWS::Lambda::Alias', 1);
     });
 
-    it('Should set default resource wait limits on Lambda', () => {
+    it('Should set default resource wait limits and concurrency on Lambda', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: {
             PROCESS_RESOURCE_MAX_LOOP_COUNT: '90',
             PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '1800',
+            PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS: '20',
+            PROCESS_RESOURCES_MAX_CONCURRENCY: '10',
           },
         },
+        MemorySize: 512,
+        Timeout: 900,
+        DurableConfig: {
+          ExecutionTimeout: 7200,
+          RetentionPeriodInDays: 1,
+        },
+      });
+    });
+
+    it('Should retain logs for three months and destroy on stack removal', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 90,
+      });
+      template.hasResource('AWS::Logs::LogGroup', {
+        DeletionPolicy: 'Delete',
+        UpdateReplacePolicy: 'Delete',
       });
     });
 
@@ -144,6 +163,7 @@ describe('EC2InstanceRunningScheduler resourceWait', () => {
       resourceWait: {
         maxLoopCount: 42,
         maxElapsedSeconds: 900,
+        statusChangeWaitSeconds: 5,
       },
     });
     const template = Template.fromStack(stack);
@@ -153,10 +173,84 @@ describe('EC2InstanceRunningScheduler resourceWait', () => {
         Variables: {
           PROCESS_RESOURCE_MAX_LOOP_COUNT: '42',
           PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '900',
+          PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS: '5',
           SLACK_SECRET_NAME: baseProps.secrets.slackSecretName,
         },
       },
     });
+  });
+});
+
+describe('EC2InstanceRunningScheduler runtime durable logGroup', () => {
+  it('overrides lambda runtime, durable execution, and log group settings', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      runtime: {
+        memorySize: 1024,
+        timeout: Duration.minutes(10),
+        maxConcurrency: 25,
+      },
+      durable: {
+        executionTimeout: Duration.hours(4),
+        retentionPeriod: Duration.days(7),
+      },
+      logGroup: {
+        retention: logs.RetentionDays.ONE_YEAR,
+        removalPolicy: RemovalPolicy.RETAIN,
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 1024,
+      Timeout: 600,
+      DurableConfig: {
+        ExecutionTimeout: 14400,
+        RetentionPeriodInDays: 7,
+      },
+      Environment: {
+        Variables: {
+          PROCESS_RESOURCES_MAX_CONCURRENCY: '25',
+        },
+      },
+    });
+    template.hasResourceProperties('AWS::Logs::LogGroup', {
+      RetentionInDays: 365,
+    });
+    template.hasResource('AWS::Logs::LogGroup', {
+      DeletionPolicy: 'Retain',
+      UpdateReplacePolicy: 'Retain',
+    });
+  });
+
+  it('throws when maxConcurrency is not a positive integer', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+
+    expect(() => {
+      new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+        ...baseProps,
+        runtime: {
+          maxConcurrency: 0,
+        },
+      });
+    }).toThrow(/runtime.maxConcurrency/);
+  });
+
+  it('throws when statusChangeWaitSeconds is not a positive integer', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+
+    expect(() => {
+      new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+        ...baseProps,
+        resourceWait: {
+          statusChangeWaitSeconds: -1,
+        },
+      });
+    }).toThrow(/resourceWait.statusChangeWaitSeconds/);
   });
 });
 

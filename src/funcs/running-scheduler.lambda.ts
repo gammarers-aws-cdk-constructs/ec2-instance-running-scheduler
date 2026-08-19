@@ -25,20 +25,13 @@ import {
   isTransitioningState,
   type ResourceWaitLimits,
 } from './running-scheduler-predicates';
-import { parseResourceWaitLimitsFromEnv } from './running-scheduler-wait-env';
+import { parseMaxConcurrencyFromEnv, parseResourceWaitLimitsFromEnv } from './running-scheduler-wait-env';
 
 /** Mapping of EC2 instance state to display name and emoji for Slack. */
 const STATE_LIST = [
   { name: 'RUNNING', emoji: '😆', state: 'running' },
   { name: 'STOPPED', emoji: '😴', state: 'stopped' },
 ] as const;
-
-/**
- * Seconds to wait between describe iterations after start/stop or while transitioning.
- *
- * Used with {@link processOneResource} durable `wait` calls between describe iterations.
- */
-const STATUS_CHANGE_WAIT_SECONDS = 20;
 
 /**
  * Options passed to {@link secretFetcher.getSecretValue} when loading the Slack secret.
@@ -126,6 +119,7 @@ const processOneResource = async (
     mode: params.Mode,
     maxLoopCount: waitLimits.maxLoopCount,
     maxElapsedSeconds: waitLimits.maxElapsedSeconds,
+    statusChangeWaitSeconds: waitLimits.statusChangeWaitSeconds,
   });
 
   const startedAtMs = await ctx.step(`${stepPrefix}-wait-started-at`, async () => Date.now());
@@ -178,9 +172,9 @@ const processOneResource = async (
       });
       ctx.logger.info('processOneResource: wait after start', {
         identifier,
-        seconds: STATUS_CHANGE_WAIT_SECONDS,
+        seconds: waitLimits.statusChangeWaitSeconds,
       });
-      await ctx.wait({ seconds: STATUS_CHANGE_WAIT_SECONDS });
+      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
       loopCount += 1;
       continue;
     }
@@ -193,9 +187,9 @@ const processOneResource = async (
       });
       ctx.logger.info('processOneResource: wait after stop', {
         identifier,
-        seconds: STATUS_CHANGE_WAIT_SECONDS,
+        seconds: waitLimits.statusChangeWaitSeconds,
       });
-      await ctx.wait({ seconds: STATUS_CHANGE_WAIT_SECONDS });
+      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
       loopCount += 1;
       continue;
     }
@@ -207,9 +201,9 @@ const processOneResource = async (
           loopCount,
           currentState,
           mode,
-          seconds: STATUS_CHANGE_WAIT_SECONDS,
+          seconds: waitLimits.statusChangeWaitSeconds,
         });
-        await ctx.wait({ seconds: STATUS_CHANGE_WAIT_SECONDS });
+        await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
         loopCount += 1;
         continue;
       }
@@ -254,8 +248,10 @@ const processOneResource = async (
  * in parallel (bounded concurrency), posts a parent Slack message and per-instance thread replies,
  * and uses durable `step` / `wait` / `map` so the run can resume across suspensions.
  *
- * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT` and
- * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS` via {@link parseResourceWaitLimitsFromEnv}.
+ * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT`,
+ * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS`, and `PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS`
+ * via {@link parseResourceWaitLimitsFromEnv}, and map concurrency from
+ * `PROCESS_RESOURCES_MAX_CONCURRENCY` via {@link parseMaxConcurrencyFromEnv}.
  * Loads the Slack secret via {@link secretFetcher} (Parameters and Secrets Lambda Extension).
  * Slack API failures are logged as `running-scheduler: Slack post failed` for CloudWatch log filters.
  *
@@ -264,7 +260,7 @@ const processOneResource = async (
  * @returns
  * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter.
  * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
- * @throws {Error} If `Params` is invalid, wait env vars are not positive integers,
+ * @throws {Error} If `Params` is invalid, wait env vars or max concurrency are not positive integers,
  *   the Slack secret is incomplete, instance processing fails (including `ResourceWaitFailed:*` errors),
  *   or the secret cannot be read from the extension (e.g. outside Lambda or missing `AWS_SESSION_TOKEN`).
  * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not valid numbers.
@@ -287,6 +283,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
   }
 
   const waitLimits = parseResourceWaitLimitsFromEnv();
+  const maxConcurrency = parseMaxConcurrencyFromEnv();
 
   const slackSecretName = StrictEnvResolver.resolve('SLACK_SECRET_NAME', StrictEnvType.String);
 
@@ -351,7 +348,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
 
   ctx.logger.info('running-scheduler: starting parallel instance processing', {
     count: targetResources.length,
-    maxConcurrency: 10,
+    maxConcurrency,
   });
 
   const results = await ctx.map(
@@ -405,7 +402,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
         return result;
       });
     },
-    { maxConcurrency: 10 },
+    { maxConcurrency },
   );
 
   const resultList = Array.isArray(results) ? results : [];

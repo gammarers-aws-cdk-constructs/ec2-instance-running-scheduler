@@ -31,7 +31,7 @@ describe('isTransitioningState', () => {
 });
 
 describe('getWaitAbortReason', () => {
-  const limits = { maxLoopCount: 3, maxElapsedSeconds: 100 };
+  const limits = { maxLoopCount: 3, maxElapsedSeconds: 100, statusChangeWaitSeconds: 20 };
   const startedAtMs = 1_000_000;
 
   it.each([
@@ -53,7 +53,7 @@ describe('formatResourceWaitFailure', () => {
     mode: 'Start' as const,
     currentState: 'pending',
     loopCount: 3,
-    limits: { maxLoopCount: 90, maxElapsedSeconds: 1800 },
+    limits: { maxLoopCount: 90, maxElapsedSeconds: 1800, statusChangeWaitSeconds: 20 },
   };
 
   it('formats MaxLoopCountExceeded', () => {

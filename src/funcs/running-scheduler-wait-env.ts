@@ -1,23 +1,26 @@
 /**
- * Lambda-only environment parsing for per-instance wait limits.
+ * Lambda-only environment parsing for running scheduler handler configuration.
  *
  * Bundled into the running scheduler function; not imported from CDK constructs.
  */
 import { StrictEnvResolver, StrictEnvType } from 'strict-env-resolver';
 import {
+  DEFAULT_MAX_CONCURRENCY,
   DEFAULT_RESOURCE_WAIT_LIMITS,
   type ResourceWaitLimits,
 } from './running-scheduler-predicates';
 import {
   PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
   PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
+  PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
+  PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
 } from './running-scheduler-wait-config';
 
 /**
  * Ensures a parsed env integer is strictly positive.
  *
  * `StrictEnvType.Number` accepts any finite number (including zero and negatives);
- * wait limits require values greater than zero.
+ * wait limits and concurrency require values greater than zero.
  *
  * @param key - Environment variable name used in error messages.
  * @param value - Parsed number from {@link StrictEnvResolver.resolveAll}.
@@ -49,6 +52,10 @@ export const parseResourceWaitLimitsFromEnv = (): ResourceWaitLimits => {
       StrictEnvType.Number,
       { default: DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds },
     ],
+    [PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV]: [
+      StrictEnvType.Number,
+      { default: DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds },
+    ],
   });
 
   return {
@@ -60,5 +67,30 @@ export const parseResourceWaitLimitsFromEnv = (): ResourceWaitLimits => {
       PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
       parsed[PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV],
     ),
+    statusChangeWaitSeconds: assertPositiveEnvInt(
+      PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
+      parsed[PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV],
+    ),
   };
+};
+
+/**
+ * Reads durable `map` bounded concurrency from the Lambda environment.
+ *
+ * @returns Parsed concurrency, using {@link DEFAULT_MAX_CONCURRENCY} when unset.
+ * @throws {import('strict-env-resolver').StrictEnvValidationError} When a set variable is not a finite number.
+ * @throws {Error} When a set variable is zero or negative.
+ */
+export const parseMaxConcurrencyFromEnv = (): number => {
+  const parsed = StrictEnvResolver.resolveAll({
+    [PROCESS_RESOURCES_MAX_CONCURRENCY_ENV]: [
+      StrictEnvType.Number,
+      { default: DEFAULT_MAX_CONCURRENCY },
+    ],
+  });
+
+  return assertPositiveEnvInt(
+    PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
+    parsed[PROCESS_RESOURCES_MAX_CONCURRENCY_ENV],
+  );
 };

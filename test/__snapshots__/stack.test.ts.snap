@@ -90,7 +90,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "392501ef2349214af0f62a8d83b8a9f44411520e361860da2814a4a566ecaeab.zip",
+          "S3Key": "a499a059fd15a02d3cab2290d0298dbb1fd7ac39d42a5476bdf0a061c05d286f.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -105,8 +105,10 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
             "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
             "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
             "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
+            "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
             "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
             "SECRETS_MANAGER_TTL": "300",
             "SLACK_SECRET_NAME": "test/slack-webhook",
@@ -153,7 +155,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012048d5f5a124a25deefbee42735196e8",
             "Version",
           ],
         },
@@ -161,7 +163,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012048d5f5a124a25deefbee42735196e8": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -537,7 +539,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "392501ef2349214af0f62a8d83b8a9f44411520e361860da2814a4a566ecaeab.zip",
+          "S3Key": "a499a059fd15a02d3cab2290d0298dbb1fd7ac39d42a5476bdf0a061c05d286f.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -552,8 +554,10 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
             "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
             "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
             "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
+            "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
             "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
             "SECRETS_MANAGER_TTL": "300",
             "SLACK_SECRET_NAME": "test/slack-webhook",
@@ -600,7 +604,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012048d5f5a124a25deefbee42735196e8",
             "Version",
           ],
         },
@@ -608,7 +612,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012048d5f5a124a25deefbee42735196e8": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -984,7 +988,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "392501ef2349214af0f62a8d83b8a9f44411520e361860da2814a4a566ecaeab.zip",
+          "S3Key": "a499a059fd15a02d3cab2290d0298dbb1fd7ac39d42a5476bdf0a061c05d286f.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -999,8 +1003,10 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
             "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
             "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
             "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
+            "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
             "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
             "SECRETS_MANAGER_TTL": "300",
             "SLACK_SECRET_NAME": "test/slack-webhook",
@@ -1047,7 +1053,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012048d5f5a124a25deefbee42735196e8",
             "Version",
           ],
         },
@@ -1055,7 +1061,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966017a26ed5ce395b22ef91645d727afed06": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012048d5f5a124a25deefbee42735196e8": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },

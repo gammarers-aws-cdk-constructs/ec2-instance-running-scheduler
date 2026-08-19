@@ -11,13 +11,19 @@ export interface ResourceWaitLimits {
   readonly maxLoopCount: number;
   /** Maximum wall-clock seconds from the first wait iteration before failing. */
   readonly maxElapsedSeconds: number;
+  /** Seconds between describe iterations after start/stop or while transitioning. */
+  readonly statusChangeWaitSeconds: number;
 }
 
 /** Default wait limits (90 loops × 20s wait ≈ 30 minutes of waits; 30 minutes elapsed). */
 export const DEFAULT_RESOURCE_WAIT_LIMITS: ResourceWaitLimits = {
   maxLoopCount: 90,
   maxElapsedSeconds: 1800,
+  statusChangeWaitSeconds: 20,
 };
+
+/** Default bounded parallelism for durable `map` over target instances. */
+export const DEFAULT_MAX_CONCURRENCY = 10;
 
 /**
  * Why per-instance waiting stopped with an error.
