@@ -10,7 +10,11 @@ Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`)
 the Resource Groups Tagging API and EC2 APIs; Slack notifications use the secret named in {@link Secrets.slackSecretName}.
 
 Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
-and enforced in the handler before the Durable execution timeout. Optional CloudWatch failure
+and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
+and map concurrency are set via {@link EC2InstanceRunningSchedulerProps.runtime}; Durable
+execution timeout and history retention via {@link EC2InstanceRunningSchedulerProps.durable};
+log retention via {@link EC2InstanceRunningSchedulerProps.logGroup}. Start/stop IAM is limited
+to instances tagged as {@link TargetResource}. Optional CloudWatch failure
 detection is available via {@link EC2InstanceRunningSchedulerProps.failureDetection}.
 
 #### Initializers <a name="Initializers" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer"></a>
@@ -25,7 +29,7 @@ new EC2InstanceRunningScheduler(scope: Construct, id: string, props: EC2Instance
 | --- | --- | --- |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | - Parent construct. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.id">id</a></code> | <code>string</code> | - Construct id. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a></code> | - Target tags, schedules, Slack secret, schedule enable flag, optional {@link ResourceWaitLimits}, and optional {@link FailureDetectionAlarms}. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a></code> | - Target tags, schedules, Slack secret, schedule enable flag, optional {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps}, {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps}, and optional {@link FailureDetectionAlarms}. |
 
 ---
 
@@ -49,7 +53,7 @@ Construct id.
 
 - *Type:* <a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a>
 
-Target tags, schedules, Slack secret, schedule enable flag, optional {@link ResourceWaitLimits}, and optional {@link FailureDetectionAlarms}.
+Target tags, schedules, Slack secret, schedule enable flag, optional {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps}, {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps}, and optional {@link FailureDetectionAlarms}.
 
 ---
 
@@ -170,8 +174,10 @@ Failure detection alarms, when {@link EC2InstanceRunningSchedulerProps.failureDe
 CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
 
 Wires {@link EC2InstanceRunningScheduler} with targeting, schedules, secrets, scheduling toggle,
-and optional {@link FailureDetectionAlarms}. Does not expose {@link ResourceWaitLimits }; use the
-construct directly when custom per-instance wait limits are required.
+and optional {@link FailureDetectionAlarms}. Does not expose {@link ResourceWaitLimits },
+{@link RunningSchedulerRuntimeProps }, {@link RunningSchedulerDurableProps }, or
+{@link RunningSchedulerLogGroupProps }; use the construct directly when custom runtime,
+wait, durable, or log group settings are required.
 
 #### Initializers <a name="Initializers" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer"></a>
 
@@ -1362,9 +1368,12 @@ const eC2InstanceRunningSchedulerProps: EC2InstanceRunningSchedulerProps = { ...
 | --- | --- | --- |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.secrets">secrets</a></code> | <code><a href="#ec2-instance-running-scheduler.Secrets">Secrets</a></code> | Secrets (e.g. Slack) used for notifications. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.targetResource">targetResource</a></code> | <code><a href="#ec2-instance-running-scheduler.TargetResource">TargetResource</a></code> | Tag-based targeting for EC2 instances to start/stop. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.durable">durable</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerDurableProps">RunningSchedulerDurableProps</a></code> | Durable Execution timeout and history retention. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.enableScheduling">enableScheduling</a></code> | <code>boolean</code> | Whether EventBridge Scheduler rules are enabled. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.failureDetection">failureDetection</a></code> | <code><a href="#ec2-instance-running-scheduler.FailureDetectionAlarms">FailureDetectionAlarms</a></code> | Optional CloudWatch alarms and log-based metrics for failure detection. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.logGroup">logGroup</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerLogGroupProps">RunningSchedulerLogGroupProps</a></code> | CloudWatch Logs retention and removal policy for the function log group. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.resourceWait">resourceWait</a></code> | <code><a href="#ec2-instance-running-scheduler.ResourceWaitLimits">ResourceWaitLimits</a></code> | Per-instance wait limits for the running scheduler Lambda. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.runtime">runtime</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerRuntimeProps">RunningSchedulerRuntimeProps</a></code> | Lambda memory, invoke timeout, and per-invocation instance concurrency. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.startSchedule">startSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for starting instances. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.stopSchedule">stopSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for stopping instances. |
 
@@ -1391,6 +1400,19 @@ public readonly targetResource: TargetResource;
 - *Type:* <a href="#ec2-instance-running-scheduler.TargetResource">TargetResource</a>
 
 Tag-based targeting for EC2 instances to start/stop.
+
+---
+
+##### `durable`<sup>Optional</sup> <a name="durable" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.durable"></a>
+
+```typescript
+public readonly durable: RunningSchedulerDurableProps;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerDurableProps">RunningSchedulerDurableProps</a>
+- *Default:* executionTimeout 2 hours, retentionPeriod 1 day
+
+Durable Execution timeout and history retention.
 
 ---
 
@@ -1423,6 +1445,19 @@ Set `enabled: true` to create alarms; optionally pass `alarmTopic` for SNS notif
 
 ---
 
+##### `logGroup`<sup>Optional</sup> <a name="logGroup" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.logGroup"></a>
+
+```typescript
+public readonly logGroup: RunningSchedulerLogGroupProps;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerLogGroupProps">RunningSchedulerLogGroupProps</a>
+- *Default:* RetentionDays.THREE_MONTHS, RemovalPolicy.DESTROY
+
+CloudWatch Logs retention and removal policy for the function log group.
+
+---
+
 ##### `resourceWait`<sup>Optional</sup> <a name="resourceWait" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.resourceWait"></a>
 
 ```typescript
@@ -1433,6 +1468,19 @@ public readonly resourceWait: ResourceWaitLimits;
 - *Default:* {@link DEFAULT_RESOURCE_WAIT_LIMITS }
 
 Per-instance wait limits for the running scheduler Lambda.
+
+---
+
+##### `runtime`<sup>Optional</sup> <a name="runtime" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.runtime"></a>
+
+```typescript
+public readonly runtime: RunningSchedulerRuntimeProps;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerRuntimeProps">RunningSchedulerRuntimeProps</a>
+- *Default:* 512 MB, 15 minutes, {@link DEFAULT_MAX_CONCURRENCY } (10)
+
+Lambda memory, invoke timeout, and per-invocation instance concurrency.
 
 ---
 
@@ -1464,7 +1512,9 @@ Cron schedule for stopping instances.
 
 Props for the EC2 instance running schedule CDK stack.
 
-> [{@link EC2InstanceRunningSchedulerProps } for construct-level options not exposed here (e.g. `resourceWait`).]({@link EC2InstanceRunningSchedulerProps } for construct-level options not exposed here (e.g. `resourceWait`).)
+> [{@link EC2InstanceRunningSchedulerProps } for construct-level options not exposed here
+(e.g. `resourceWait`, `runtime`, `durable`, `logGroup`).]({@link EC2InstanceRunningSchedulerProps } for construct-level options not exposed here
+(e.g. `resourceWait`, `runtime`, `durable`, `logGroup`).)
 
 #### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.Initializer"></a>
 
@@ -1893,6 +1943,7 @@ const resourceWaitLimits: ResourceWaitLimits = { ... }
 | --- | --- | --- |
 | <code><a href="#ec2-instance-running-scheduler.ResourceWaitLimits.property.maxElapsedSeconds">maxElapsedSeconds</a></code> | <code>number</code> | Maximum wall-clock seconds spent waiting for a single instance to stabilize. |
 | <code><a href="#ec2-instance-running-scheduler.ResourceWaitLimits.property.maxLoopCount">maxLoopCount</a></code> | <code>number</code> | Maximum describe/wait loop iterations per instance. |
+| <code><a href="#ec2-instance-running-scheduler.ResourceWaitLimits.property.statusChangeWaitSeconds">statusChangeWaitSeconds</a></code> | <code>number</code> | Seconds to wait between describe iterations after start/stop or while transitioning. |
 
 ---
 
@@ -1919,6 +1970,70 @@ public readonly maxLoopCount: number;
 - *Default:* {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount } (90)
 
 Maximum describe/wait loop iterations per instance.
+
+---
+
+##### `statusChangeWaitSeconds`<sup>Optional</sup> <a name="statusChangeWaitSeconds" id="ec2-instance-running-scheduler.ResourceWaitLimits.property.statusChangeWaitSeconds"></a>
+
+```typescript
+public readonly statusChangeWaitSeconds: number;
+```
+
+- *Type:* number
+- *Default:* {@link DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds } (20)
+
+Seconds to wait between describe iterations after start/stop or while transitioning.
+
+Lower values detect state changes sooner; higher values reduce DescribeInstances calls.
+
+---
+
+### RunningSchedulerDurableProps <a name="RunningSchedulerDurableProps" id="ec2-instance-running-scheduler.RunningSchedulerDurableProps"></a>
+
+Durable Execution timeout and history retention for the running scheduler Lambda.
+
+#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.RunningSchedulerDurableProps.Initializer"></a>
+
+```typescript
+import { RunningSchedulerDurableProps } from 'ec2-instance-running-scheduler'
+
+const runningSchedulerDurableProps: RunningSchedulerDurableProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerDurableProps.property.executionTimeout">executionTimeout</a></code> | <code>aws-cdk-lib.Duration</code> | Maximum duration of a durable execution. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerDurableProps.property.retentionPeriod">retentionPeriod</a></code> | <code>aws-cdk-lib.Duration</code> | How long to retain durable execution history. |
+
+---
+
+##### `executionTimeout`<sup>Optional</sup> <a name="executionTimeout" id="ec2-instance-running-scheduler.RunningSchedulerDurableProps.property.executionTimeout"></a>
+
+```typescript
+public readonly executionTimeout: Duration;
+```
+
+- *Type:* aws-cdk-lib.Duration
+- *Default:* Duration.hours(2)
+
+Maximum duration of a durable execution.
+
+Increase when many instances are processed with long per-instance waits.
+
+---
+
+##### `retentionPeriod`<sup>Optional</sup> <a name="retentionPeriod" id="ec2-instance-running-scheduler.RunningSchedulerDurableProps.property.retentionPeriod"></a>
+
+```typescript
+public readonly retentionPeriod: Duration;
+```
+
+- *Type:* aws-cdk-lib.Duration
+- *Default:* Duration.days(1)
+
+How long to retain durable execution history.
 
 ---
 
@@ -1977,6 +2092,120 @@ public readonly runningScheduleFunction: IFunction;
 - *Type:* aws-cdk-lib.aws_lambda.IFunction
 
 Running scheduler Lambda to monitor.
+
+---
+
+### RunningSchedulerLogGroupProps <a name="RunningSchedulerLogGroupProps" id="ec2-instance-running-scheduler.RunningSchedulerLogGroupProps"></a>
+
+CloudWatch Logs settings for the running scheduler function log group.
+
+#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.RunningSchedulerLogGroupProps.Initializer"></a>
+
+```typescript
+import { RunningSchedulerLogGroupProps } from 'ec2-instance-running-scheduler'
+
+const runningSchedulerLogGroupProps: RunningSchedulerLogGroupProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerLogGroupProps.property.removalPolicy">removalPolicy</a></code> | <code>aws-cdk-lib.RemovalPolicy</code> | Removal policy for the log group. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerLogGroupProps.property.retention">retention</a></code> | <code>aws-cdk-lib.aws_logs.RetentionDays</code> | How long to retain application logs. |
+
+---
+
+##### `removalPolicy`<sup>Optional</sup> <a name="removalPolicy" id="ec2-instance-running-scheduler.RunningSchedulerLogGroupProps.property.removalPolicy"></a>
+
+```typescript
+public readonly removalPolicy: RemovalPolicy;
+```
+
+- *Type:* aws-cdk-lib.RemovalPolicy
+- *Default:* RemovalPolicy.DESTROY
+
+Removal policy for the log group.
+
+---
+
+##### `retention`<sup>Optional</sup> <a name="retention" id="ec2-instance-running-scheduler.RunningSchedulerLogGroupProps.property.retention"></a>
+
+```typescript
+public readonly retention: RetentionDays;
+```
+
+- *Type:* aws-cdk-lib.aws_logs.RetentionDays
+- *Default:* RetentionDays.THREE_MONTHS
+
+How long to retain application logs.
+
+---
+
+### RunningSchedulerRuntimeProps <a name="RunningSchedulerRuntimeProps" id="ec2-instance-running-scheduler.RunningSchedulerRuntimeProps"></a>
+
+Lambda invoke settings and bounded parallelism for the running scheduler function.
+
+Increase {@link memorySize} and {@link maxConcurrency} when a single invocation targets
+many instances or regions.
+
+#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.RunningSchedulerRuntimeProps.Initializer"></a>
+
+```typescript
+import { RunningSchedulerRuntimeProps } from 'ec2-instance-running-scheduler'
+
+const runningSchedulerRuntimeProps: RunningSchedulerRuntimeProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerRuntimeProps.property.maxConcurrency">maxConcurrency</a></code> | <code>number</code> | Maximum number of instances processed in parallel by the durable `map`. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerRuntimeProps.property.memorySize">memorySize</a></code> | <code>number</code> | Memory allocated to the running scheduler Lambda, in MB. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerRuntimeProps.property.timeout">timeout</a></code> | <code>aws-cdk-lib.Duration</code> | Invoke timeout for the Lambda function (not the durable execution timeout). |
+
+---
+
+##### `maxConcurrency`<sup>Optional</sup> <a name="maxConcurrency" id="ec2-instance-running-scheduler.RunningSchedulerRuntimeProps.property.maxConcurrency"></a>
+
+```typescript
+public readonly maxConcurrency: number;
+```
+
+- *Type:* number
+- *Default:* {@link DEFAULT_MAX_CONCURRENCY } (10)
+
+Maximum number of instances processed in parallel by the durable `map`.
+
+---
+
+##### `memorySize`<sup>Optional</sup> <a name="memorySize" id="ec2-instance-running-scheduler.RunningSchedulerRuntimeProps.property.memorySize"></a>
+
+```typescript
+public readonly memorySize: number;
+```
+
+- *Type:* number
+- *Default:* 512
+
+Memory allocated to the running scheduler Lambda, in MB.
+
+---
+
+##### `timeout`<sup>Optional</sup> <a name="timeout" id="ec2-instance-running-scheduler.RunningSchedulerRuntimeProps.property.timeout"></a>
+
+```typescript
+public readonly timeout: Duration;
+```
+
+- *Type:* aws-cdk-lib.Duration
+- *Default:* Duration.minutes(15)
+
+Invoke timeout for the Lambda function (not the durable execution timeout).
+
+AWS Lambda's maximum invoke timeout is 15 minutes. Durable waits can continue
+beyond this via {@link RunningSchedulerDurableProps.executionTimeout}.
 
 ---
 
@@ -2086,6 +2315,10 @@ Name of the Secrets Manager secret containing Slack token and channel.
 ### TargetResource <a name="TargetResource" id="ec2-instance-running-scheduler.TargetResource"></a>
 
 Defines which EC2 instances are targeted by tag key and values.
+
+Instances must already have this tag. IAM allows `ec2:StartInstances` /
+`ec2:StopInstances` only on instances in the stack account and region whose
+`aws:ResourceTag/<tagKey>` matches one of {@link TargetResource.tagValues}.
 
 #### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.TargetResource.Initializer"></a>
 
