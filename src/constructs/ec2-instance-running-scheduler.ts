@@ -8,8 +8,8 @@ import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import {
   createRunningSchedulerFailureDetection,
-  type FailureDetectionAlarms,
   type RunningSchedulerFailureDetection,
+  type RunningSchedulerFailureDetectionProps,
 } from './running-scheduler-failure-detection';
 import { RunningSchedulerFunction } from '../funcs/running-scheduler-function';
 import {
@@ -24,10 +24,21 @@ import {
 } from '../funcs/running-scheduler-wait-config';
 
 export type {
-  FailureDetectionAlarms,
   RunningSchedulerFailureDetection,
   RunningSchedulerFailureDetectionProps,
+  RunningSchedulerFailureDetectionResourcesProps,
 } from './running-scheduler-failure-detection';
+export type { LambdaFailureDetection } from './lambda-failure-detector/lambda-failure-detection';
+export type { LogFailureFilter } from './lambda-failure-detector/log-failure-filter';
+export {
+  LambdaFailureDetector,
+  type LambdaFailureDetectorProps,
+  type LogFailureAlarm,
+} from './lambda-failure-detector/lambda-failure-detector';
+export {
+  createLambdaFailureDetector,
+  type CreateLambdaFailureDetectorProps,
+} from './lambda-failure-detector/create-lambda-failure-detector';
 
 /**
  * Cron-style schedule configuration for start/stop actions.
@@ -210,7 +221,7 @@ export interface EC2InstanceRunningSchedulerProps {
    *
    * @default disabled when omitted
    */
-  readonly failureDetection?: FailureDetectionAlarms;
+  readonly failureDetection?: RunningSchedulerFailureDetectionProps;
 }
 
 const DEFAULT_LAMBDA_MEMORY_SIZE = 512;
@@ -318,7 +329,7 @@ export class EC2InstanceRunningScheduler extends Construct {
    * @param props - Target tags, schedules, Slack secret, schedule enable flag, optional
    *   {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps},
    *   {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps},
-   *   and optional {@link FailureDetectionAlarms}.
+   *   and optional {@link RunningSchedulerFailureDetectionProps}.
    */
   constructor(scope: Construct, id: string, props: EC2InstanceRunningSchedulerProps) {
     super(scope, id);
