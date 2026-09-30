@@ -77,7 +77,12 @@ export interface RunningSchedulerFailureDetectionResourcesProps {
 }
 
 /**
- * Resolves a required log-filter alarm created from {@link RUNNING_SCHEDULER_LOG_FILTERS}.
+ * Resolves a required log-filter alarm created from the scheduler log filters.
+ *
+ * @param detector - Detector that owns the log-filter alarms.
+ * @param id - {@link LogFailureFilter} id.
+ * @returns The CloudWatch alarm for that filter.
+ * @throws {Error} When no alarm exists for the given id.
  */
 const requireLogFilterAlarm = (
   detector: LambdaFailureDetector,

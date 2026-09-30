@@ -173,6 +173,9 @@ export class LambdaFailureDetector extends Construct {
 
   /**
    * Returns the log-filter alarm for the given filter id, or undefined when missing.
+   *
+   * @param id - Same as {@link LogFailureFilter.id}.
+   * @returns Matching alarm, or undefined when the id was not in `logFilters`.
    */
   public findLogFilterAlarm(id: string): cloudwatch.Alarm | undefined {
     return this.logFilterAlarms.find((entry) => entry.id === id)?.alarm;
