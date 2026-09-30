@@ -3,7 +3,7 @@ import { Template } from 'aws-cdk-lib/assertions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import { createLambdaFailureDetector } from '../src/constructs/lambda-failure-detector/create-lambda-failure-detector';
+import { createLambdaFailureDetector } from '../src';
 
 describe('createLambdaFailureDetector', () => {
   const createStackWithFunction = () => {

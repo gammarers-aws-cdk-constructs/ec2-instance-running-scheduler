@@ -3,9 +3,12 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
-import type { LambdaFailureDetection } from './lambda-failure-detector/lambda-failure-detection';
-import { LambdaFailureDetector } from './lambda-failure-detector/lambda-failure-detector';
-import type { LogFailureFilter } from './lambda-failure-detector/log-failure-filter';
+import {
+  isLambdaFailureDetectionEnabled,
+  LambdaFailureDetector,
+  type LambdaFailureDetection,
+  type LogFailureFilter,
+} from './lambda-failure-detector/lambda-failure-detector';
 
 /** CloudWatch custom metric namespace for running-scheduler log-based failure metrics. */
 const METRIC_NAMESPACE = 'EC2InstanceRunningScheduler';
@@ -73,8 +76,20 @@ export interface RunningSchedulerFailureDetectionResourcesProps {
   readonly logGroup: logs.ILogGroup;
 }
 
-const isFailureDetectionEnabled = (failureDetection: RunningSchedulerFailureDetectionProps): boolean =>
-  failureDetection.enabled === true;
+/**
+ * Resolves a required log-filter alarm created from {@link RUNNING_SCHEDULER_LOG_FILTERS}.
+ */
+const requireLogFilterAlarm = (
+  detector: LambdaFailureDetector,
+  id: string,
+): cloudwatch.Alarm => {
+  const alarm = detector.findLogFilterAlarm(id);
+  if (!alarm) {
+    throw new Error(`RunningSchedulerFailureDetection: missing log filter alarm for id "${id}".`);
+  }
+
+  return alarm;
+};
 
 /**
  * CloudWatch alarms and log-based metrics for the EC2 instance running scheduler.
@@ -108,16 +123,9 @@ export class RunningSchedulerFailureDetection extends LambdaFailureDetector {
       logFilters: RUNNING_SCHEDULER_LOG_FILTERS,
     });
 
-    const instanceStatusFailureAlarm = this.findLogFilterAlarm(INSTANCE_STATUS_FAILURE_ID);
-    const slackPostFailureAlarm = this.findLogFilterAlarm(SLACK_POST_FAILURE_ID);
-    const durableExecutionFailureAlarm = this.findLogFilterAlarm(DURABLE_EXECUTION_FAILURE_ID);
-    if (!instanceStatusFailureAlarm || !slackPostFailureAlarm || !durableExecutionFailureAlarm) {
-      throw new Error('RunningSchedulerFailureDetection: expected log filter alarms were not created.');
-    }
-
-    this.instanceStatusFailureAlarm = instanceStatusFailureAlarm;
-    this.slackPostFailureAlarm = slackPostFailureAlarm;
-    this.durableExecutionFailureAlarm = durableExecutionFailureAlarm;
+    this.instanceStatusFailureAlarm = requireLogFilterAlarm(this, INSTANCE_STATUS_FAILURE_ID);
+    this.slackPostFailureAlarm = requireLogFilterAlarm(this, SLACK_POST_FAILURE_ID);
+    this.durableExecutionFailureAlarm = requireLogFilterAlarm(this, DURABLE_EXECUTION_FAILURE_ID);
   }
 }
 
@@ -134,7 +142,7 @@ export const createRunningSchedulerFailureDetection = (
   id: string,
   props: CreateRunningSchedulerFailureDetectionProps,
 ): RunningSchedulerFailureDetection | undefined => {
-  if (!props.failureDetection || !isFailureDetectionEnabled(props.failureDetection)) {
+  if (!props.failureDetection || !isLambdaFailureDetectionEnabled(props.failureDetection)) {
     return undefined;
   }
 

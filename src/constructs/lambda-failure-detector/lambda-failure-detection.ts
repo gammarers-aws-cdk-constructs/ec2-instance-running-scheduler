@@ -21,3 +21,10 @@ export interface LambdaFailureDetection {
    */
   readonly alarmTopic?: sns.ITopic;
 }
+
+/**
+ * Whether {@link LambdaFailureDetection} requests alarm creation.
+ */
+export const isLambdaFailureDetectionEnabled = (
+  failureDetection: LambdaFailureDetection,
+): boolean => failureDetection.enabled === true;

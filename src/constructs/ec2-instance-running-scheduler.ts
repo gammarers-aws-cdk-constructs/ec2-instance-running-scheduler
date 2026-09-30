@@ -28,17 +28,16 @@ export type {
   RunningSchedulerFailureDetectionProps,
   RunningSchedulerFailureDetectionResourcesProps,
 } from './running-scheduler-failure-detection';
-export type { LambdaFailureDetection } from './lambda-failure-detector/lambda-failure-detection';
-export type { LogFailureFilter } from './lambda-failure-detector/log-failure-filter';
-export {
-  LambdaFailureDetector,
-  type LambdaFailureDetectorProps,
-  type LogFailureAlarm,
-} from './lambda-failure-detector/lambda-failure-detector';
 export {
   createLambdaFailureDetector,
+  isLambdaFailureDetectionEnabled,
+  LambdaFailureDetector,
   type CreateLambdaFailureDetectorProps,
-} from './lambda-failure-detector/create-lambda-failure-detector';
+  type LambdaFailureDetection,
+  type LambdaFailureDetectorProps,
+  type LogFailureAlarm,
+  type LogFailureFilter,
+} from './lambda-failure-detector/lambda-failure-detector';
 
 /**
  * Cron-style schedule configuration for start/stop actions.
