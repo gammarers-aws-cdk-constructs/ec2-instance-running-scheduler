@@ -1,20 +1,54 @@
-import { Duration } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
+import {
+  isLambdaFailureDetectionEnabled,
+  LambdaFailureDetector,
+  type LambdaFailureDetection,
+  type LogFailureFilter,
+} from './lambda-failure-detector/lambda-failure-detector';
 
-/** CloudWatch custom metric namespace for log-based failure detection metrics. */
+/** CloudWatch custom metric namespace for running-scheduler log-based failure metrics. */
 const METRIC_NAMESPACE = 'EC2InstanceRunningScheduler';
+
+const INSTANCE_STATUS_FAILURE_ID = 'InstanceStatusFailure';
+const SLACK_POST_FAILURE_ID = 'SlackPostFailure';
+const DURABLE_EXECUTION_FAILURE_ID = 'DurableExecutionFailure';
+
+/**
+ * Log-based failure filters for the EC2 running scheduler Lambda.
+ *
+ * Defined in one place for this construct; passed into {@link LambdaFailureDetector}.
+ */
+const RUNNING_SCHEDULER_LOG_FILTERS: LogFailureFilter[] = [
+  {
+    id: INSTANCE_STATUS_FAILURE_ID,
+    filterPattern: '"ResourceWaitFailed"',
+    metricNamespace: METRIC_NAMESPACE,
+    metricName: 'InstanceStatusFailure',
+  },
+  {
+    id: SLACK_POST_FAILURE_ID,
+    filterPattern: '"running-scheduler: Slack post failed"',
+    metricNamespace: METRIC_NAMESPACE,
+    metricName: 'SlackPostFailure',
+  },
+  {
+    id: DURABLE_EXECUTION_FAILURE_ID,
+    filterPattern: '"ERROR" - "processOneResource" - "ResourceWaitFailed" - "running-scheduler: Slack post failed"',
+    metricNamespace: METRIC_NAMESPACE,
+    metricName: 'DurableExecutionFailure',
+  },
+];
 
 /**
  * Props accepted by {@link createRunningSchedulerFailureDetection}.
  */
 interface CreateRunningSchedulerFailureDetectionProps {
-  /** Failure detection options; alarms are created only when {@link FailureDetectionAlarms.enabled} is true. */
-  readonly failureDetection?: FailureDetectionAlarms;
+  /** Failure detection options; alarms are created only when {@link RunningSchedulerFailureDetectionProps.enabled} is true. */
+  readonly failureDetection?: RunningSchedulerFailureDetectionProps;
   /** Running scheduler Lambda to monitor. */
   readonly runningScheduleFunction: lambda.IFunction;
   /** Application log group for the running scheduler Lambda. */
@@ -22,89 +56,50 @@ interface CreateRunningSchedulerFailureDetectionProps {
 }
 
 /**
- * Optional CloudWatch alarms and log-based metrics for operational failure detection.
+ * Opt-in failure detection for `EC2InstanceRunningScheduler`.
  *
- * When {@link FailureDetectionAlarms.enabled} is true, the construct creates alarms for Lambda
- * errors, Durable handler failures, EC2 instance status wait failures, and Slack post failures.
- * Alarms can optionally notify an SNS topic supplied by the caller.
+ * Pass as `EC2InstanceRunningSchedulerProps.failureDetection`. Extends
+ * {@link LambdaFailureDetection} (`enabled` / `alarmTopic`). Which log failures are
+ * monitored is defined in this module and applied by {@link RunningSchedulerFailureDetection}.
  */
-export interface FailureDetectionAlarms {
-  /**
-   * When true, creates failure detection alarms and log-based metrics.
-   *
-   * @default false when omitted
-   */
-  readonly enabled?: boolean;
-  /**
-   * SNS topic for alarm notifications.
-   *
-   * When omitted, alarms are created without SNS actions.
-   */
+export interface RunningSchedulerFailureDetectionProps extends LambdaFailureDetection {}
+
+/**
+ * Lambda and log group monitored by {@link RunningSchedulerFailureDetection}.
+ *
+ * Normally `EC2InstanceRunningScheduler` creates this binding. Use directly only when
+ * composing failure detection outside the scheduler construct.
+ */
+export interface RunningSchedulerFailureDetectionResourcesProps {
   readonly alarmTopic?: sns.ITopic;
-}
-
-/**
- * Props for {@link RunningSchedulerFailureDetection}.
- */
-export interface RunningSchedulerFailureDetectionProps {
-  /** Alarm configuration (must have {@link FailureDetectionAlarms.enabled} true). */
-  readonly failureDetection: FailureDetectionAlarms;
-  /** Running scheduler Lambda to monitor. */
   readonly runningScheduleFunction: lambda.IFunction;
-  /** Application log group for the running scheduler Lambda. */
   readonly logGroup: logs.ILogGroup;
 }
 
-const isFailureDetectionEnabled = (failureDetection: FailureDetectionAlarms): boolean =>
-  failureDetection.enabled === true;
-
 /**
- * Registers an SNS alarm action when a topic is configured.
+ * Resolves a required log-filter alarm created from the scheduler log filters.
  *
- * @param alarm - CloudWatch alarm to notify.
- * @param alarmTopic - Optional SNS topic from {@link FailureDetectionAlarms.alarmTopic}.
+ * @param detector - Detector that owns the log-filter alarms.
+ * @param id - {@link LogFailureFilter} id.
+ * @returns The CloudWatch alarm for that filter.
+ * @throws {Error} When no alarm exists for the given id.
  */
-const attachAlarmActions = (alarm: cloudwatch.Alarm, alarmTopic?: sns.ITopic): void => {
-  if (!alarmTopic) {
-    return;
+const requireLogFilterAlarm = (
+  detector: LambdaFailureDetector,
+  id: string,
+): cloudwatch.Alarm => {
+  const alarm = detector.findLogFilterAlarm(id);
+  if (!alarm) {
+    throw new Error(`RunningSchedulerFailureDetection: missing log filter alarm for id "${id}".`);
   }
 
-  alarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
-};
-
-/**
- * Creates a CloudWatch alarm that fires when a sum metric is greater than or equal to 1.
- *
- * Uses `treatMissingData: notBreaching` so scheduled invocations do not alarm between runs.
- *
- * @param scope - Parent construct.
- * @param id - Alarm construct id.
- * @param props - Metric to alarm on and optional SNS topic.
- * @returns Configured CloudWatch alarm.
- */
-const createLogSumAlarm = (
-  scope: Construct,
-  id: string,
-  props: {
-    metric: cloudwatch.IMetric;
-    alarmTopic?: sns.ITopic;
-  },
-): cloudwatch.Alarm => {
-  const alarm = new cloudwatch.Alarm(scope, id, {
-    metric: props.metric,
-    threshold: 1,
-    comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-    evaluationPeriods: 1,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  } as cloudwatch.AlarmProps);
-  attachAlarmActions(alarm, props.alarmTopic);
   return alarm;
 };
 
 /**
- * CloudWatch alarms and log-based metrics for the running scheduler Lambda.
+ * CloudWatch alarms and log-based metrics for the EC2 instance running scheduler.
  *
- * When enabled, creates four alarms:
+ * Extends {@link LambdaFailureDetector} with scheduler-specific log filters:
  * - `lambdaErrorsAlarm` – `AWS/Lambda` `Errors` metric.
  * - `instanceStatusFailureAlarm` – log filter for `ResourceWaitFailed:*`.
  * - `slackPostFailureAlarm` – log filter for `running-scheduler: Slack post failed`.
@@ -112,84 +107,30 @@ const createLogSumAlarm = (
  *
  * Custom metrics are published under the `EC2InstanceRunningScheduler` namespace.
  */
-export class RunningSchedulerFailureDetection extends Construct {
-  /** SNS topic used for alarm actions, when configured. */
-  public readonly alarmTopic?: sns.ITopic;
-  /** Fires when the Lambda `Errors` metric is non-zero. */
-  public readonly lambdaErrorsAlarm: cloudwatch.Alarm;
-  /** Fires on handler-level ERROR logs outside instance waiting and Slack post failures. */
-  public readonly durableExecutionFailureAlarm: cloudwatch.Alarm;
+export class RunningSchedulerFailureDetection extends LambdaFailureDetector {
   /** Fires when instance stable-state waiting fails (`ResourceWaitFailed:*`). */
   public readonly instanceStatusFailureAlarm: cloudwatch.Alarm;
   /** Fires when Slack `chat.postMessage` fails. */
   public readonly slackPostFailureAlarm: cloudwatch.Alarm;
+  /** Fires on handler-level ERROR logs outside instance waiting and Slack post failures. */
+  public readonly durableExecutionFailureAlarm: cloudwatch.Alarm;
 
   /**
    * @param scope - Parent construct.
    * @param id - Construct id.
-   * @param props - Lambda, log group, and {@link FailureDetectionAlarms} (must have `enabled: true`).
+   * @param props - Lambda, log group, and optional alarm notification topic.
    */
-  constructor(scope: Construct, id: string, props: RunningSchedulerFailureDetectionProps) {
-    super(scope, id);
-
-    const alarmTopic = props.failureDetection.alarmTopic;
-    this.alarmTopic = alarmTopic;
-
-    this.lambdaErrorsAlarm = createLogSumAlarm(this, 'LambdaErrorsAlarm', {
-      metric: props.runningScheduleFunction.metricErrors({
-        period: Duration.minutes(5),
-        statistic: 'Sum',
-      }),
-      alarmTopic,
-    });
-
-    const instanceStatusFailureMetric = new logs.MetricFilter(this, 'InstanceStatusFailureMetric', {
+  constructor(scope: Construct, id: string, props: RunningSchedulerFailureDetectionResourcesProps) {
+    super(scope, id, {
+      lambdaFunction: props.runningScheduleFunction,
       logGroup: props.logGroup,
-      filterPattern: logs.FilterPattern.literal('"ResourceWaitFailed"'),
-      metricNamespace: METRIC_NAMESPACE,
-      metricName: 'InstanceStatusFailure',
-      metricValue: '1',
-      defaultValue: 0,
-    });
-    this.instanceStatusFailureAlarm = createLogSumAlarm(this, 'InstanceStatusFailureAlarm', {
-      metric: instanceStatusFailureMetric.metric({
-        period: Duration.minutes(5),
-        statistic: 'Sum',
-      }),
-      alarmTopic,
+      alarmTopic: props.alarmTopic,
+      logFilters: RUNNING_SCHEDULER_LOG_FILTERS,
     });
 
-    const slackPostFailureMetric = new logs.MetricFilter(this, 'SlackPostFailureMetric', {
-      logGroup: props.logGroup,
-      filterPattern: logs.FilterPattern.literal('"running-scheduler: Slack post failed"'),
-      metricNamespace: METRIC_NAMESPACE,
-      metricName: 'SlackPostFailure',
-      metricValue: '1',
-      defaultValue: 0,
-    });
-    this.slackPostFailureAlarm = createLogSumAlarm(this, 'SlackPostFailureAlarm', {
-      metric: slackPostFailureMetric.metric({
-        period: Duration.minutes(5),
-        statistic: 'Sum',
-      }),
-      alarmTopic,
-    });
-
-    const durableExecutionFailureMetric = new logs.MetricFilter(this, 'DurableExecutionFailureMetric', {
-      logGroup: props.logGroup,
-      filterPattern: logs.FilterPattern.literal('"ERROR" - "processOneResource" - "ResourceWaitFailed" - "running-scheduler: Slack post failed"'),
-      metricNamespace: METRIC_NAMESPACE,
-      metricName: 'DurableExecutionFailure',
-      metricValue: '1',
-      defaultValue: 0,
-    });
-    this.durableExecutionFailureAlarm = createLogSumAlarm(this, 'DurableExecutionFailureAlarm', {
-      metric: durableExecutionFailureMetric.metric({
-        period: Duration.minutes(5),
-        statistic: 'Sum',
-      }),
-      alarmTopic,
-    });
+    this.instanceStatusFailureAlarm = requireLogFilterAlarm(this, INSTANCE_STATUS_FAILURE_ID);
+    this.slackPostFailureAlarm = requireLogFilterAlarm(this, SLACK_POST_FAILURE_ID);
+    this.durableExecutionFailureAlarm = requireLogFilterAlarm(this, DURABLE_EXECUTION_FAILURE_ID);
   }
 }
 
@@ -206,12 +147,12 @@ export const createRunningSchedulerFailureDetection = (
   id: string,
   props: CreateRunningSchedulerFailureDetectionProps,
 ): RunningSchedulerFailureDetection | undefined => {
-  if (!props.failureDetection || !isFailureDetectionEnabled(props.failureDetection)) {
+  if (!props.failureDetection || !isLambdaFailureDetectionEnabled(props.failureDetection)) {
     return undefined;
   }
 
   return new RunningSchedulerFailureDetection(scope, id, {
-    failureDetection: props.failureDetection,
+    alarmTopic: props.failureDetection.alarmTopic,
     runningScheduleFunction: props.runningScheduleFunction,
     logGroup: props.logGroup,
   });

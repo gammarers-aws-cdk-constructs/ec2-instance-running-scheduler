@@ -1,46 +1,59 @@
-# EC2 Instance Running Scheduler (AWS CDK v2)
+# EC2 Instance Running Scheduler (CDK v2)
 
-[![GitHub](https://img.shields.io/github/license/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler?style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/blob/main/LICENSE)
-[![npm](https://img.shields.io/npm/v/ec2-instance-running-scheduler?style=flat-square)](https://www.npmjs.com/package/ec2-instance-running-scheduler)
-[![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/release.yml?branch=main&label=release&style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/actions/workflows/release.yml)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler?sort=semver&style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/releases)
+[![npm version](https://img.shields.io/npm/v/ec2-instance-running-scheduler?style=flat-square)](https://www.npmjs.com/package/ec2-instance-running-scheduler)
+[![license](https://img.shields.io/npm/l/ec2-instance-running-scheduler?style=flat-square)](https://www.npmjs.com/package/ec2-instance-running-scheduler)
+[![Node.js](https://img.shields.io/node/v/ec2-instance-running-scheduler?style=flat-square)](https://www.npmjs.com/package/ec2-instance-running-scheduler)
+[![build](https://img.shields.io/github/actions/workflow/status/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/build.yml?label=build&style=flat-square)](https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler/actions/workflows/build.yml)
 
 [![View on Construct Hub](https://constructs.dev/badge?package=ec2-instance-running-scheduler)](https://constructs.dev/packages/ec2-instance-running-scheduler)
 
-AWS CDK construct library that starts and stops EC2 instances on a cron schedule using **EventBridge Scheduler** and a **Durable Execution Lambda**. The handler discovers instances with the **Resource Groups Tagging API**, issues start/stop, **waits until each instance reaches a stable target state** (durable `step` / `wait`), processes **multiple instances in parallel** (bounded concurrency), and posts **Slack** summary and per-instance thread messages using a secret from **Secrets Manager**. The Lambda emits **structured application logs** alongside JSON platform logs.
+AWS CDK construct library that starts and stops EC2 instances on a cron schedule using EventBridge Scheduler and a Durable Execution Lambda. Tagged instances are discovered account-wide, started or stopped in parallel, waited until stable, and reported to Slack via Secrets Manager.
 
 ## Features
 
 - **Tag-based targeting** – Select EC2 instances by tag key and values (e.g. `Schedule` / `YES`) via `tag:GetResources`.
 - **EventBridge Scheduler** – Separate cron rules for start and stop, with per-rule timezone (`aws-cdk-lib` `TimeZone`).
 - **Durable Lambda** – One Lambda with AWS Lambda Durable Execution (`step`, `wait`, `map`, child contexts per instance) for long-running workflows without Step Functions.
-- **Stable-state waiting** – After start/stop, the function waits (`resourceWait.statusChangeWaitSeconds`, default **20** seconds between attempts) and re-describes instances until `running` (start mode) or `stopped` (stop mode).
-- **Configurable wait limits** – Per-instance **max loop count**, **max elapsed time**, and **status-change wait interval** via `resourceWait` (default: 90 loops / 1800 seconds / 20 seconds). Failures use explicit `ResourceWaitFailed:*` messages instead of running until the Durable execution timeout (construct default: 2 hours; override with `durable.executionTimeout`).
-- **Configurable Lambda runtime** – Memory, invoke timeout, and bounded instance concurrency via `runtime` (default: **512 MB** / **15 minutes** / **maxConcurrency 10**). Durable execution timeout and history retention via `durable` (default: **2 hours** / **1 day**).
-- **Configurable logs** – Log group retention and removal policy via `logGroup` (default: **3 months**, `RemovalPolicy.DESTROY`).
-- **Validated environment variables** – The bundled handler parses env vars with **strict-env-resolver** (`StrictEnvResolver`). `SLACK_SECRET_NAME` is required; wait limits and `maxConcurrency` must be **positive integers** (`>= 1`).
-- **Slack notifications** – Parent message plus threaded updates per instance; credentials from Secrets Manager JSON (`token`, `channel`). The construct sets **`SLACK_SECRET_NAME`** on the function.
-- **Structured logging** – Durable execution **`ctx.logger`** for traceable JSON application logs (invocation, describe/start/stop/wait loops, wait limit errors, Slack steps, completion).
-- **Optional failure detection** – CloudWatch alarms and log-based metrics for Lambda errors, instance wait failures (`ResourceWaitFailed`), Slack post failures, and other handler `ERROR` logs. Optional SNS notifications via a caller-supplied topic (`failureDetection.alarmTopic`).
+- **Stable-state waiting** – After start/stop, waits and re-describes until `running` or `stopped`, with configurable wait limits (`resourceWait`).
+- **Configurable Lambda runtime** – Memory, invoke timeout, and bounded concurrency via `runtime`; Durable timeout and retention via `durable`.
+- **Slack notifications** – Parent message plus threaded updates per instance; credentials from Secrets Manager JSON (`token`, `channel`).
+- **Optional failure detection** – Opt-in CloudWatch alarms via `failureDetection` (`enabled` / optional `alarmTopic`). Uses `LambdaFailureDetector` for platform Lambda `Errors` plus scheduler-specific log filters (`ResourceWaitFailed`, Slack post failures, other handler `ERROR` logs). The construct never creates an SNS topic.
 - **Scheduling toggle** – Enable or disable both schedules without removing the stack (`enableScheduling`).
-- **Configurable schedules** – Optional cron overrides for start and stop (`minute`, `hour`, `week`, `timezone`); sensible defaults if omitted.
-- **IAM and observability** – Start/stop is limited to EC2 instances in the stack account/region whose tags match `targetResource`. Slack secret read grant, **Parameters and Secrets Lambda Extension**, JSON logging, and a dedicated log group (override retention and removal policy via `logGroup`).
+
+## How it works
+
+1. Tag EC2 instances in the same account and region with the `targetResource` tag key and one of the tag values **before** enabling schedules.
+2. EventBridge Scheduler invokes the Lambda alias on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`).
+3. The Durable handler discovers matching instances via the Resource Groups Tagging API, then starts or stops them in parallel (bounded by `runtime.maxConcurrency`).
+4. For each instance it waits (`resourceWait`) until the desired stable state, or fails with a `ResourceWaitFailed:*` error.
+5. Slack receives a summary and per-instance thread updates when the secret is configured.
+6. When `failureDetection.enabled` is `true`, CloudWatch alarms cover Lambda platform errors and the scheduler log filters above. Pass `failureDetection.alarmTopic` to attach SNS actions to an existing topic.
+
+**Tag an instance (AWS CLI)**
+
+```bash
+aws ec2 create-tags \
+  --resources i-0123456789abcdef0 \
+  --tags Key=Schedule,Value=YES
+```
+
+Start/stop IAM is limited to instance ARNs in the stack account and region whose `aws:ResourceTag/<tagKey>` matches `tagValues`. `tag:GetResources` and `ec2:DescribeInstances` still use `Resource: *` because those APIs do not support resource-level permissions or resource-tag conditions.
 
 ## Installation
 
-**npm**
+### npm
 
 ```bash
 npm install ec2-instance-running-scheduler
 ```
 
-**yarn**
+### yarn
 
 ```bash
 yarn add ec2-instance-running-scheduler
 ```
 
-**pnpm**
+### pnpm
 
 ```bash
 pnpm add ec2-instance-running-scheduler
@@ -108,7 +121,7 @@ new EC2InstanceRunningScheduler(stack, 'EC2InstanceRunningScheduler', {
 });
 ```
 
-Use the **stack** `EC2InstanceRunningScheduleStack` when deploying the scheduler as its own stack. It accepts the same **targeting, schedules, secrets, enable flag, and failure detection** as the construct (plus standard `StackProps` such as `env`). For **`resourceWait`**, **`runtime`**, **`durable`**, and **`logGroup`**, use the construct directly or extend the stack in your app.
+Use the **stack** `EC2InstanceRunningScheduleStack` when deploying the scheduler as its own stack. It accepts the same targeting, schedules, secrets, enable flag, and failure detection as the construct (plus standard `StackProps`). For `resourceWait`, `runtime`, `durable`, and `logGroup`, use the construct directly.
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -152,39 +165,6 @@ new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', {
 });
 ```
 
-## Tag instances before scheduling
-
-The scheduler only starts and stops EC2 instances that **already** have the tag key and one of the tag values in `targetResource`. Tag instances in the same account and region as the stack **before** enabling schedules.
-
-**AWS CLI**
-
-```bash
-aws ec2 create-tags \
-  --resources i-0123456789abcdef0 \
-  --tags Key=Schedule,Value=YES
-```
-
-**Console** – EC2 → Instances → select the instance → Tags → Add `Schedule` = `YES` (or your `tagKey` / `tagValues`).
-
-IAM for `ec2:StartInstances` and `ec2:StopInstances` is limited to:
-
-- instance ARNs in the stack **account** and **region** (`arn:...:ec2:<region>:<account>:instance/*`)
-- instances whose `aws:ResourceTag/<tagKey>` matches one of `tagValues`
-
-An instance without the tag is not discovered by `tag:GetResources`, and start/stop is denied even if an instance ID is known. `tag:GetResources` and `ec2:DescribeInstances` still use `Resource: *` because those APIs do not support resource-level permissions or resource-tag conditions.
-
-EventBridge Scheduler invokes the Lambda with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`); the construct wires this for you. The function environment includes:
-
-| Variable | Source | Purpose |
-|----------|--------|---------|
-| `SLACK_SECRET_NAME` | `secrets.slackSecretName` | Secrets Manager secret for Slack (required) |
-| `PROCESS_RESOURCE_MAX_LOOP_COUNT` | `resourceWait.maxLoopCount` (default `90`) | Max describe/wait iterations per instance |
-| `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS` | `resourceWait.maxElapsedSeconds` (default `1800`) | Max wall-clock seconds waiting for one instance |
-| `PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS` | `resourceWait.statusChangeWaitSeconds` (default `20`) | Seconds between describe/wait iterations |
-| `PROCESS_RESOURCES_MAX_CONCURRENCY` | `runtime.maxConcurrency` (default `10`) | Max instances processed in parallel |
-
-When you set wait limits via `resourceWait` or concurrency via `runtime.maxConcurrency`, the construct writes them as decimal integer strings. At invocation the handler parses them with **strict-env-resolver**; each value must be a **positive integer** (`>= 1`). Missing `SLACK_SECRET_NAME` or invalid env values cause `StrictEnvValidationError` at the start of an invocation.
-
 ## Options
 
 ### EC2InstanceRunningScheduler
@@ -200,7 +180,7 @@ When you set wait limits via `resourceWait` or concurrency via `runtime.maxConcu
 | `runtime` | `RunningSchedulerRuntimeProps` | No | Lambda memory, invoke timeout, and map concurrency. |
 | `durable` | `RunningSchedulerDurableProps` | No | Durable execution timeout and history retention. |
 | `logGroup` | `RunningSchedulerLogGroupProps` | No | Function log group retention and removal policy. |
-| `failureDetection` | `FailureDetectionAlarms` | No | Optional CloudWatch alarms and log-based metrics (see below). |
+| `failureDetection` | `RunningSchedulerFailureDetectionProps` | No | Optional CloudWatch alarms and log-based metrics (see below). |
 
 ### EC2InstanceRunningScheduleStack
 
@@ -210,8 +190,6 @@ Includes `targetResource`, `secrets`, `startSchedule`, `stopSchedule`, `enableSc
 
 - `tagKey` – Tag key used to select instances (e.g. `Schedule`). Required on each target instance before schedules run.
 - `tagValues` – Tag values that must match (e.g. `['YES']`). At least one value is required.
-
-See [Tag instances before scheduling](#tag-instances-before-scheduling).
 
 ### Schedule
 
@@ -252,30 +230,34 @@ Lambda invoke settings. Written `maxConcurrency` to `PROCESS_RESOURCES_MAX_CONCU
 - `retention` – CloudWatch Logs retention (default: **`RetentionDays.THREE_MONTHS`**).
 - `removalPolicy` – Log group removal policy (default: **`RemovalPolicy.DESTROY`**).
 
-### FailureDetectionAlarms
+### RunningSchedulerFailureDetectionProps
 
-Optional operational failure detection. Alarms are created only when `enabled` is `true`.
+Extends `LambdaFailureDetection` (`enabled` / `alarmTopic`). Alarms are created only when `enabled` is `true`. Internally uses `LambdaFailureDetector` with scheduler-specific log filters. The construct does **not** create an SNS topic.
 
 - `enabled` – When `true`, creates four CloudWatch alarms and three log metric filters (default: disabled when omitted).
-- `alarmTopic` – Optional `sns.ITopic` for alarm actions. The construct does **not** create an SNS topic; pass an existing or imported topic. When omitted, alarms are created without SNS actions.
+- `alarmTopic` – Optional `sns.ITopic` for alarm actions. When omitted, alarms are created without SNS actions.
 
-When enabled, the construct creates:
+When enabled:
 
 | Alarm | Trigger |
 |-------|---------|
-| Lambda errors | `AWS/Lambda` `Errors` metric |
+| Lambda errors | `AWS/Lambda` `Errors` metric (platform) |
 | Instance status failure | Log filter: `ResourceWaitFailed` |
 | Slack post failure | Log filter: `running-scheduler: Slack post failed` |
 | Durable execution failure | Other handler `ERROR` logs (excluding the above) |
 
-Custom metrics are published under the `EC2InstanceRunningScheduler` namespace. Access the created alarms via `EC2InstanceRunningScheduler.failureDetection` when enabled.
+Custom metrics use the `EC2InstanceRunningScheduler` namespace. Access created alarms via `EC2InstanceRunningScheduler.failureDetection` when enabled.
+
+## API
+
+See [API.md](./API.md).
 
 ## Requirements
 
 - **Node.js** ≥ 20.0.0 (for developing or synthesizing CDK apps that depend on this package).
 - **aws-cdk-lib** ^2.232.0 and **constructs** ^10.5.1 (peer dependencies).
-- **AWS** – EventBridge Scheduler; Lambda with **Durable Execution** (Node.js **24.x** runtime in the construct; Durable Execution requires a supported Node.js runtime in your region), a **live alias**, **Parameters and Secrets Lambda Extension**; EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`); Secrets Manager. The deployed function uses **arm64**, Durable Execution IAM policies, a 2-hour Durable execution timeout (construct default), and a bundled handler that loads secrets via **aws-lambda-secret-fetcher** (^0.7) and parses env vars via **strict-env-resolver** (^0.6). Secret fetch runs only inside Lambda (requires runtime `AWS_SESSION_TOKEN` and the extension layer); the library retries transient extension errors including cold-start "not ready" responses.
+- **AWS** – EventBridge Scheduler; Lambda with Durable Execution (Node.js **24.x** runtime in the construct); Parameters and Secrets Lambda Extension; EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`); Secrets Manager.
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
+This project is licensed under the (Apache-2.0) License.

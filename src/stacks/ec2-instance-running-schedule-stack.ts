@@ -1,6 +1,6 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EC2InstanceRunningScheduler, TargetResource, Secrets, Schedule, type FailureDetectionAlarms } from '../constructs/ec2-instance-running-scheduler';
+import { EC2InstanceRunningScheduler, TargetResource, Secrets, Schedule, type RunningSchedulerFailureDetectionProps } from '../constructs/ec2-instance-running-scheduler';
 
 /**
  * Props for the EC2 instance running schedule CDK stack.
@@ -20,14 +20,14 @@ export interface EC2InstanceRunningScheduleStackProps extends StackProps {
   /** Cron schedule for starting instances. */
   readonly startSchedule?: Schedule;
   /** Optional CloudWatch failure detection alarms and log-based metrics. */
-  readonly failureDetection?: FailureDetectionAlarms;
+  readonly failureDetection?: RunningSchedulerFailureDetectionProps;
 }
 
 /**
  * CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
  *
  * Wires {@link EC2InstanceRunningScheduler} with targeting, schedules, secrets, scheduling toggle,
- * and optional {@link FailureDetectionAlarms}. Does not expose {@link ResourceWaitLimits},
+ * and optional {@link RunningSchedulerFailureDetectionProps}. Does not expose {@link ResourceWaitLimits},
  * {@link RunningSchedulerRuntimeProps}, {@link RunningSchedulerDurableProps}, or
  * {@link RunningSchedulerLogGroupProps}; use the construct directly when custom runtime,
  * wait, durable, or log group settings are required.

@@ -25,15 +25,15 @@ import {
 export const parseResourceWaitLimitsFromEnv = (): ResourceWaitLimits => {
   const parsed = StrictEnvResolver.resolveAll({
     [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: [
-      StrictEnvType.PositiveInt,
+      StrictEnvType.Number.PositiveInteger,
       { default: DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount },
     ],
     [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: [
-      StrictEnvType.PositiveInt,
+      StrictEnvType.Number.PositiveInteger,
       { default: DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds },
     ],
     [PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV]: [
-      StrictEnvType.PositiveInt,
+      StrictEnvType.Number.PositiveInteger,
       { default: DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds },
     ],
   });
@@ -54,7 +54,7 @@ export const parseResourceWaitLimitsFromEnv = (): ResourceWaitLimits => {
 export const parseMaxConcurrencyFromEnv = (): number => {
   const parsed = StrictEnvResolver.resolveAll({
     [PROCESS_RESOURCES_MAX_CONCURRENCY_ENV]: [
-      StrictEnvType.PositiveInt,
+      StrictEnvType.Number.PositiveInteger,
       { default: DEFAULT_MAX_CONCURRENCY },
     ],
   });

@@ -73,8 +73,9 @@ interface SlackSecret {
 /**
  * Whether a secret payload is a JSON object with non-empty Slack `token` and `channel`.
  *
- * `aws-lambda-secret-fetcher` ^0.7 parses JSON with quiet-json-parser; invalid or empty
- * JSON falls back to the original string instead of throwing.
+ * `aws-lambda-secret-fetcher` ^0.8 parses JSON string secrets with quiet-json-parser
+ * (invalid or empty JSON falls back to the original string) and returns binary secrets as
+ * `Uint8Array`, which this guard rejects.
  *
  * @param value - Value returned by {@link secretFetcher.getSecretValue}.
  * @returns `true` when `value` is a {@link SlackSecret}.
