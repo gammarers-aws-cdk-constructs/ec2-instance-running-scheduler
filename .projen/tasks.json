@@ -431,6 +431,7 @@
             "@aws-sdk/client-ec2",
             "@aws-sdk/client-resource-groups-tagging-api",
             "@aws/durable-execution-sdk-js",
+            "@gammarers/projen-projects",
             "@slack/web-api",
             "@stylistic/eslint-plugin",
             "@types/aws-lambda",

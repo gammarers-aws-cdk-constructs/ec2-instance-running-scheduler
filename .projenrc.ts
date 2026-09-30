@@ -1,18 +1,14 @@
-import { awscdk, javascript, github } from 'projen';
-const project = new awscdk.AwsCdkConstructLibrary({
-  author: 'yicr',
-  authorAddress: 'yicr@users.noreply.github.com',
+import { ProjenCdkConstructLibrary } from '@gammarers/projen-projects';
+import { awscdk } from 'projen';
+const project = new ProjenCdkConstructLibrary({
   cdkVersion: '2.232.0',
   defaultReleaseBranch: 'main',
-  typescriptVersion: '6.0.x',
-  jsiiVersion: '6.0.x',
   name: 'ec2-instance-running-scheduler',
-  packageManager: javascript.NodePackageManager.NPM,
-  projenrcTs: true,
   repositoryUrl: 'https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler.git',
   description: 'AWS CDK construct library that starts and stops EC2 instances on a cron schedule using EventBridge Scheduler and a Durable Execution Lambda. Tagged instances are discovered account-wide, started or stopped in parallel, waited until stable, and reported to Slack via Secrets Manager.',
   keywords: ['cdk', 'ec2', 'scheduler', 'durable', 'execution', 'lambda', 'slack'],
   devDeps: [
+    '@gammarers/projen-projects@^0.4.0',
     '@aws/durable-execution-sdk-js@^1.1.7',
     '@aws-sdk/client-ec2@^3.1111.0',
     '@aws-sdk/client-resource-groups-tagging-api@^3.1111.0',
@@ -25,30 +21,6 @@ const project = new awscdk.AwsCdkConstructLibrary({
   ],
   releaseToNpm: true,
   npmTrustedPublishing: true,
-  npmAccess: javascript.NpmAccess.PUBLIC,
-  minNodeVersion: '20.0.0',
-  workflowNodeVersion: '24.x',
-  depsUpgradeOptions: {
-    workflowOptions: {
-      labels: ['auto-approve', 'auto-merge'],
-      schedule: javascript.UpgradeDependenciesSchedule.WEEKLY,
-    },
-  },
-  githubOptions: {
-    projenCredentials: github.GithubCredentials.fromApp({
-      permissions: {
-        pullRequests: github.workflows.AppPermission.WRITE,
-        contents: github.workflows.AppPermission.WRITE,
-        workflows: github.workflows.AppPermission.WRITE,
-      },
-    }),
-  },
-  autoApproveOptions: {
-    allowedUsernames: [
-      'gammarers-projen-upgrade-bot[bot]',
-      'yicr',
-    ],
-  },
   jestOptions: {
     extraCliOptions: ['--silent'],
   },

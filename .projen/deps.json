@@ -16,6 +16,11 @@
       "type": "build"
     },
     {
+      "name": "@gammarers/projen-projects",
+      "version": "^0.4.0",
+      "type": "build"
+    },
+    {
       "name": "@slack/web-api",
       "version": "^6.13.0",
       "type": "build"
