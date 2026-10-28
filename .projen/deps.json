@@ -6,7 +6,17 @@
       "type": "build"
     },
     {
+      "name": "@aws-sdk/client-eventbridge",
+      "version": "^3.1111.0",
+      "type": "build"
+    },
+    {
       "name": "@aws-sdk/client-resource-groups-tagging-api",
+      "version": "^3.1111.0",
+      "type": "build"
+    },
+    {
+      "name": "@aws-sdk/client-sns",
       "version": "^3.1111.0",
       "type": "build"
     },
@@ -23,6 +33,11 @@
     {
       "name": "@slack/web-api",
       "version": "^6.13.0",
+      "type": "build"
+    },
+    {
+      "name": "@smithy/node-http-handler",
+      "version": "^4.12.1",
       "type": "build"
     },
     {
