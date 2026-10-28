@@ -1,5 +1,6 @@
 import { App, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import * as events from 'aws-cdk-lib/aws-events';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack } from '../src';
@@ -8,9 +9,6 @@ const baseProps = {
   targetResource: {
     tagKey: 'WorkHoursRunning',
     tagValues: ['YES'],
-  },
-  secrets: {
-    slackSecretName: 'test/slack-webhook',
   },
 };
 
@@ -38,6 +36,7 @@ describe('EC2InstanceRunningScheduleStack', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: {
+            NOTIFICATION_CHANNEL: 'logs',
             PROCESS_RESOURCE_MAX_LOOP_COUNT: '90',
             PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '1800',
             PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS: '20',
@@ -216,7 +215,7 @@ describe('EC2InstanceRunningScheduler resourceWait', () => {
           PROCESS_RESOURCE_MAX_LOOP_COUNT: '42',
           PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '900',
           PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS: '5',
-          SLACK_SECRET_NAME: baseProps.secrets.slackSecretName,
+          NOTIFICATION_CHANNEL: 'logs',
         },
       },
     });
@@ -391,10 +390,10 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
       }],
     });
     template.hasResourceProperties('AWS::Logs::MetricFilter', {
-      FilterPattern: '"running-scheduler: Slack post failed"',
+      FilterPattern: '"running-scheduler: notification post failed"',
       MetricTransformations: [{
         MetricNamespace: 'EC2InstanceRunningScheduler',
-        MetricName: 'SlackPostFailure',
+        MetricName: 'NotificationPostFailure',
       }],
     });
   });
@@ -436,6 +435,120 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
     template.resourceCountIs('AWS::SNS::Topic', 0);
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
       AlarmActions: [alarmTopicArn],
+    });
+  });
+});
+
+describe('EC2InstanceRunningScheduler notification', () => {
+  it('throws when the Slack secret name is blank', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+
+    expect(() => {
+      new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+        ...baseProps,
+        notification: {
+          channel: 'slack',
+          slackSecretName: '  ',
+        },
+      });
+    }).toThrow(/slackSecretName/);
+  });
+
+  it('grants Slack secret read and sets the secret name when Slack is selected', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      notification: {
+        channel: 'slack',
+        slackSecretName: 'test/slack',
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          NOTIFICATION_CHANNEL: 'slack',
+          SLACK_SECRET_NAME: 'test/slack',
+        },
+      },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith(['secretsmanager:GetSecretValue']),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('grants sns:Publish on the provided topic and does not create a topic', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    const topicArn = 'arn:aws:sns:ap-northeast-1:123456789012:ops-notify';
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      notification: {
+        channel: 'sns',
+        topic: sns.Topic.fromTopicArn(stack, 'NotifyTopic', topicArn),
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::SNS::Topic', 0);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          NOTIFICATION_CHANNEL: 'sns',
+          NOTIFICATION_TOPIC_ARN: topicArn,
+        },
+      },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: 'sns:Publish',
+            Resource: topicArn,
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('grants events:PutEvents on the provided custom bus', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      notification: {
+        channel: 'eventBridge',
+        eventBus: events.EventBus.fromEventBusName(stack, 'NotifyBus', 'ops-bus'),
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::Events::EventBus', 0);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          NOTIFICATION_CHANNEL: 'eventBridge',
+          NOTIFICATION_EVENT_BUS_NAME: 'ops-bus',
+        },
+      },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: 'events:PutEvents',
+          }),
+        ]),
+      },
     });
   });
 });
