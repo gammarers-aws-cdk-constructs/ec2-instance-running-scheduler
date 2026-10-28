@@ -106,8 +106,9 @@ export type RunningSchedulerNotification = SlackNotification | SnsNotification |
 /**
  * CDK-side limits for per-instance stable-state waiting in the Durable Lambda handler.
  *
- * Optional fields map to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV} and
- * {@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV} on the running scheduler function.
+ * Optional fields map to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV},
+ * {@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV}, and
+ * {@link PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV} on the running scheduler function.
  * Prevents abnormal or stuck transitions from running until the Durable execution timeout.
  *
  * The handler reads the same numbers from its environment and applies them as required limits.

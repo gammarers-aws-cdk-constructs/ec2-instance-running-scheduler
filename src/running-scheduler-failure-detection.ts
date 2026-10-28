@@ -57,7 +57,7 @@ interface CreateRunningSchedulerFailureDetectionProps {
 }
 
 /**
- * Opt-in failure detection for `EC2InstanceRunningScheduler`.
+ * Opt-in failure detection for {@link EC2InstanceRunningScheduler}.
  *
  * Pass as `EC2InstanceRunningSchedulerProps.failureDetection`. Extends
  * {@link LambdaFailureDetection} (`enabled` / `alarmTopic`). Which log failures are
@@ -72,8 +72,11 @@ export interface RunningSchedulerFailureDetectionProps extends LambdaFailureDete
  * composing failure detection outside the scheduler construct.
  */
 export interface RunningSchedulerFailureDetectionResourcesProps {
+  /** Existing SNS topic for alarm actions. When omitted, alarms have no SNS actions. */
   readonly alarmTopic?: sns.ITopic;
+  /** Running scheduler Lambda whose platform metrics are alarmed. */
   readonly runningScheduleFunction: lambda.IFunction;
+  /** Application log group used by the scheduler log filters. */
   readonly logGroup: logs.ILogGroup;
 }
 
