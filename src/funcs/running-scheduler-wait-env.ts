@@ -31,7 +31,7 @@ import {
  * @throws {import('strict-env-resolver').StrictEnvValidationError} When a set variable is not a positive integer.
  */
 export const parseResourceWaitLimitsFromEnv = (): ResourceWaitLimits => {
-  const parsed = StrictEnvResolver.resolveAll({
+  const parsed = StrictEnvResolver.resolves({
     [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: [
       StrictEnvType.Number.PositiveInteger,
       { default: DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount },
@@ -60,7 +60,7 @@ export const parseResourceWaitLimitsFromEnv = (): ResourceWaitLimits => {
  * @throws {import('strict-env-resolver').StrictEnvValidationError} When a set variable is not a positive integer.
  */
 export const parseMaxConcurrencyFromEnv = (): number => {
-  const parsed = StrictEnvResolver.resolveAll({
+  const parsed = StrictEnvResolver.resolves({
     [PROCESS_RESOURCES_MAX_CONCURRENCY_ENV]: [
       StrictEnvType.Number.PositiveInteger,
       { default: DEFAULT_MAX_CONCURRENCY },
