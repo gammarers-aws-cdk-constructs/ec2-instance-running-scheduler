@@ -14,24 +14,64 @@ import {
   StartInstancesCommand,
   StopInstancesCommand,
 } from '@aws-sdk/client-ec2';
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { WebClient } from '@slack/web-api';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { secretFetcher, type GetSecretValueOptions } from 'aws-lambda-secret-fetcher';
-import { StrictEnvResolver, StrictEnvType } from 'strict-env-resolver';
+import {
+  buildNotificationEventDetail,
+  formatNotificationText,
+  instanceStatusDisplay,
+  notificationSubject,
+  type NotificationInstance,
+} from './core/notification-message';
 import {
   formatResourceWaitFailure,
   getWaitAbortReason,
   isDesiredStableState,
   isTransitioningState,
   type ResourceWaitLimits,
-} from './running-scheduler-predicates';
-import { parseMaxConcurrencyFromEnv, parseResourceWaitLimitsFromEnv } from './running-scheduler-wait-env';
+} from './core/running-scheduler-predicates';
+import {
+  parseMaxConcurrencyFromEnv,
+  parseNotificationFromEnv,
+  parseResourceWaitLimitsFromEnv,
+  type ResolvedNotification,
+} from './running-scheduler-wait-env';
+import {
+  NOTIFICATION_CHANNEL_EVENT_BRIDGE,
+  NOTIFICATION_CHANNEL_LOGS,
+  NOTIFICATION_CHANNEL_SLACK,
+  NOTIFICATION_CHANNEL_SNS,
+  NOTIFICATION_EVENT_DETAIL_TYPE,
+  NOTIFICATION_EVENT_SOURCE,
+  NOTIFICATION_POST_FAILED_LOG,
+} from '../settings/consts';
 
-/** Mapping of EC2 instance state to display name and emoji for Slack. */
-const STATE_LIST = [
-  { name: 'RUNNING', emoji: '😆', state: 'running' },
-  { name: 'STOPPED', emoji: '😴', state: 'stopped' },
-] as const;
+/** Total SDK attempts per send, including the first call. Transient errors stay inside the SDK. */
+const AWS_SDK_MAX_ATTEMPTS = 3;
+/** TCP connect timeout for AWS SDK clients. */
+const AWS_SDK_CONNECTION_TIMEOUT_MS = 5_000;
+/** Per-attempt HTTP timeout for AWS SDK clients. */
+const AWS_SDK_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * SDK client options. Region comes from the Lambda environment.
+ *
+ * @returns Attempts and HTTP timeouts for one client instance.
+ */
+const awsSdkClientConfig = (): {
+  maxAttempts: number;
+  requestHandler: NodeHttpHandler;
+} => ({
+  maxAttempts: AWS_SDK_MAX_ATTEMPTS,
+  requestHandler: new NodeHttpHandler({
+    connectionTimeout: AWS_SDK_CONNECTION_TIMEOUT_MS,
+    requestTimeout: AWS_SDK_REQUEST_TIMEOUT_MS,
+  }),
+});
 
 /**
  * Options passed to {@link secretFetcher.getSecretValue} when loading the Slack secret.
@@ -73,7 +113,7 @@ interface SlackSecret {
 /**
  * Whether a secret payload is a JSON object with non-empty Slack `token` and `channel`.
  *
- * `aws-lambda-secret-fetcher` ^0.8 parses JSON string secrets with quiet-json-parser
+ * `aws-lambda-secret-fetcher` ^0.9 parses JSON string secrets with quiet-json-parser
  * (invalid or empty JSON falls back to the original string) and returns binary secrets as
  * `Uint8Array`, which this guard rejects.
  *
@@ -96,15 +136,25 @@ const isSlackSecret = (value: unknown): value is SlackSecret => {
   return true;
 };
 
+/** Slack Web API client and channel loaded for this invocation. */
+interface SlackClientBinding {
+  /** Slack Web API client. */
+  readonly client: WebClient;
+  /** Channel passed to `chat.postMessage`. */
+  readonly channel: string;
+}
+
 /**
- * Returns display name and emoji for an EC2 instance state.
+ * Text of an unknown thrown value, without assuming it is an {@link Error}.
  *
- * @param current - Current instance state (e.g. 'running', 'stopped').
- * @returns Display info or undefined if state is not in STATE_LIST.
+ * @param error - Value caught from a notification send.
+ * @returns A message safe to log. Does not include secrets.
  */
-const getStateDisplay = (current: string): { emoji: string; name: string } | undefined => {
-  const found = STATE_LIST.find((s) => s.state === current);
-  return found ? { emoji: found.emoji, name: found.name } : undefined;
+const errorText = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 };
 
 /**
@@ -176,7 +226,7 @@ const processOneResource = async (
     }
 
     currentState = await ctx.step(`${stepPrefix}-describe-${loopCount}`, async () => {
-      const ec2 = new EC2Client({});
+      const ec2 = new EC2Client(awsSdkClientConfig());
       const out = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [identifier] }));
       return out.Reservations?.[0]?.Instances?.[0]?.State?.Name ?? 'unknown';
     });
@@ -193,7 +243,7 @@ const processOneResource = async (
     if (mode === 'Start' && currentState === 'stopped') {
       ctx.logger.info('processOneResource: starting instance', { identifier, loopCount });
       await ctx.step(`${stepPrefix}-start-${loopCount}`, async () => {
-        const ec2 = new EC2Client({});
+        const ec2 = new EC2Client(awsSdkClientConfig());
         await ec2.send(new StartInstancesCommand({ InstanceIds: [identifier] }));
       });
       ctx.logger.info('processOneResource: wait after start', {
@@ -208,7 +258,7 @@ const processOneResource = async (
     if (mode === 'Stop' && currentState === 'running') {
       ctx.logger.info('processOneResource: stopping instance', { identifier, loopCount });
       await ctx.step(`${stepPrefix}-stop-${loopCount}`, async () => {
-        const ec2 = new EC2Client({});
+        const ec2 = new EC2Client(awsSdkClientConfig());
         await ec2.send(new StopInstancesCommand({ InstanceIds: [identifier] }));
       });
       ctx.logger.info('processOneResource: wait after stop', {
@@ -220,20 +270,20 @@ const processOneResource = async (
       continue;
     }
 
-    if (!isDesiredStableState(mode, currentState)) {
-      if (isTransitioningState(mode, currentState)) {
-        ctx.logger.info('processOneResource: wait while transitioning', {
-          identifier,
-          loopCount,
-          currentState,
-          mode,
-          seconds: waitLimits.statusChangeWaitSeconds,
-        });
-        await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
-        loopCount += 1;
-        continue;
-      }
+    if (isTransitioningState(mode, currentState)) {
+      ctx.logger.info('processOneResource: wait while transitioning', {
+        identifier,
+        loopCount,
+        currentState,
+        mode,
+        seconds: waitLimits.statusChangeWaitSeconds,
+      });
+      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
+      loopCount += 1;
+      continue;
+    }
 
+    if (!isDesiredStableState(mode, currentState)) {
       const message = formatResourceWaitFailure('UnexpectedInstanceState', {
         identifier,
         mode,
@@ -267,28 +317,248 @@ const processOneResource = async (
   };
 };
 
+/** One processed instance, including the ARN kept on the handler result. */
+interface ProcessedInstance extends NotificationInstance {
+  /** EC2 instance ARN. */
+  readonly resource: string;
+}
+
+/**
+ * Loads Slack credentials when that channel is selected.
+ *
+ * A secret that is not JSON with non-empty `token` and `channel` is a configuration error and throws.
+ * Send failures later in the run are logged and do not throw.
+ *
+ * @param ctx - Root durable execution context.
+ * @param notification - Channel resolved from the environment.
+ * @returns Slack client, or `undefined` when the channel is not Slack.
+ * @throws {Error} When the secret JSON is missing `token` or `channel`.
+ */
+const loadSlackClient = async (
+  ctx: DurableContext,
+  notification: ResolvedNotification,
+): Promise<SlackClientBinding | undefined> => {
+  if (notification.channel !== NOTIFICATION_CHANNEL_SLACK) {
+    return undefined;
+  }
+
+  const slackSecretName = notification.slackSecretName;
+  const slackSecretValue: unknown = await ctx.step('fetch-slack-secret', async () => {
+    ctx.logger.info('running-scheduler: fetching Slack secret', { secretName: slackSecretName });
+    return secretFetcher.getSecretValue(slackSecretName, SLACK_SECRET_FETCH_OPTIONS);
+  });
+  ctx.logger.info('running-scheduler: Slack secret loaded');
+  if (!isSlackSecret(slackSecretValue)) {
+    throw new Error('Slack secret must contain token and channel.');
+  }
+
+  return {
+    client: new WebClient(slackSecretValue.token),
+    channel: slackSecretValue.channel,
+  };
+};
+
+/**
+ * Logs a notification send failure for the CloudWatch metric filter.
+ *
+ * The instance start/stop result is left unchanged.
+ *
+ * @param ctx - Durable context whose logger receives the error line.
+ * @param step - Durable step name.
+ * @param channel - Notification channel that failed.
+ * @param error - Failure from the send. Tokens are not logged.
+ */
+const logNotificationFailure = (
+  ctx: DurableContext,
+  step: string,
+  channel: ResolvedNotification['channel'],
+  error: unknown,
+): void => {
+  ctx.logger.error(NOTIFICATION_POST_FAILED_LOG, {
+    step,
+    notificationChannel: channel,
+    errorMessage: errorText(error),
+  });
+};
+
+/**
+ * Posts the Slack parent message. A send failure is logged and returns no thread timestamp.
+ *
+ * @param ctx - Root durable execution context.
+ * @param slack - Slack client and channel.
+ * @param mode - Start or stop.
+ * @returns Slack thread timestamp, or `undefined` when the post failed.
+ */
+const postSlackParent = async (
+  ctx: DurableContext,
+  slack: SlackClientBinding,
+  mode: 'Start' | 'Stop',
+): Promise<string | undefined> => {
+  ctx.logger.info('running-scheduler: posting parent Slack message', { mode });
+  const threadTs = await ctx.step('post-slack-messages', async () => {
+    try {
+      const posted = await slack.client.chat.postMessage({
+        channel: slack.channel,
+        text: notificationSubject(mode),
+      });
+      return posted.ts ?? '';
+    } catch (error: unknown) {
+      logNotificationFailure(ctx, 'post-slack-messages', NOTIFICATION_CHANNEL_SLACK, error);
+      return '';
+    }
+  });
+  if (threadTs === '') {
+    return undefined;
+  }
+  ctx.logger.info('running-scheduler: parent Slack message posted', { threadTs });
+  return threadTs;
+};
+
+/**
+ * Posts one Slack thread reply for a finished instance.
+ *
+ * @param ctx - Child durable context for this instance.
+ * @param slack - Slack client and channel.
+ * @param threadTs - Parent thread timestamp. Omitted when the parent post failed.
+ * @param instance - Finished instance.
+ */
+const postSlackThread = async (
+  ctx: DurableContext,
+  slack: SlackClientBinding,
+  threadTs: string | undefined,
+  instance: ProcessedInstance,
+): Promise<void> => {
+  const display = instanceStatusDisplay(instance.status);
+  ctx.logger.info('running-scheduler: posting thread Slack message', {
+    identifier: instance.identifier,
+    status: instance.status,
+  });
+  await ctx.step('post-slack-child-messages', async () => {
+    try {
+      await slack.client.chat.postMessage({
+        channel: slack.channel,
+        ...(threadTs ? { thread_ts: threadTs } : {}),
+        attachments: [
+          {
+            color: '#36a64f',
+            pretext: `${display.emoji} The status of the EC2 Instance ${instance.identifier} changed to ${display.name} due to the schedule.`,
+            fields: [
+              { title: 'Account', value: instance.account, short: true },
+              { title: 'Region', value: instance.region, short: true },
+              { title: 'Identifier', value: instance.identifier, short: true },
+              { title: 'Status', value: display.name, short: true },
+            ],
+          },
+        ],
+      });
+    } catch (error: unknown) {
+      logNotificationFailure(ctx, 'post-slack-child-messages', NOTIFICATION_CHANNEL_SLACK, error);
+    }
+  });
+};
+
+/**
+ * Sends the plain-text summary for logs, SNS, or EventBridge.
+ *
+ * SNS is one publish after every instance finishes, because email subscriptions have no thread.
+ * A send failure is logged inside the durable step and does not fail the run. SDK retries stay on the client.
+ *
+ * @param ctx - Root durable execution context.
+ * @param notification - Channel resolved from the environment.
+ * @param mode - Start or stop.
+ * @param instances - Instances that finished processing.
+ */
+const publishSummary = async (
+  ctx: DurableContext,
+  notification: ResolvedNotification,
+  mode: 'Start' | 'Stop',
+  instances: readonly NotificationInstance[],
+): Promise<void> => {
+  if (notification.channel === NOTIFICATION_CHANNEL_SLACK) {
+    return;
+  }
+
+  const text = formatNotificationText(mode, instances);
+  if (notification.channel === NOTIFICATION_CHANNEL_LOGS) {
+    await ctx.step('log-notification', async () => {
+      ctx.logger.info('running-scheduler: notification', {
+        notificationChannel: notification.channel,
+        subject: text.subject,
+        message: text.message,
+      });
+    });
+    return;
+  }
+  if (notification.channel === NOTIFICATION_CHANNEL_SNS) {
+    const topicArn = notification.topicArn;
+    await ctx.step('publish-sns-notification', async () => {
+      try {
+        const sns = new SNSClient(awsSdkClientConfig());
+        // Email subscriptions show Subject as the mail subject and Message as the plain-text body.
+        await sns.send(new PublishCommand({
+          TopicArn: topicArn,
+          Subject: text.subject,
+          Message: text.message,
+        }));
+      } catch (error: unknown) {
+        logNotificationFailure(ctx, 'publish-sns-notification', NOTIFICATION_CHANNEL_SNS, error);
+      }
+    });
+    return;
+  }
+
+  const eventBusName = notification.eventBusName;
+  const detail = buildNotificationEventDetail(mode, instances);
+  await ctx.step('put-notification-event', async () => {
+    try {
+      const events = new EventBridgeClient(awsSdkClientConfig());
+      const sent = await events.send(new PutEventsCommand({
+        Entries: [{
+          EventBusName: eventBusName,
+          Source: NOTIFICATION_EVENT_SOURCE,
+          DetailType: NOTIFICATION_EVENT_DETAIL_TYPE,
+          Detail: JSON.stringify(detail),
+        }],
+      }));
+      const failedCount = sent.FailedEntryCount ?? 0;
+      if (failedCount === 0) {
+        return;
+      }
+      logNotificationFailure(
+        ctx,
+        'put-notification-event',
+        NOTIFICATION_CHANNEL_EVENT_BRIDGE,
+        new Error(sent.Entries?.[0]?.ErrorMessage ?? 'PutEvents entry failed'),
+      );
+    } catch (error: unknown) {
+      logNotificationFailure(ctx, 'put-notification-event', NOTIFICATION_CHANNEL_EVENT_BRIDGE, error);
+    }
+  });
+};
+
 /**
  * Durable Lambda entry point for the EC2 running scheduler.
  *
  * Resolves instances via Resource Groups Tagging API, runs {@link processOneResource} for each ARN
- * in parallel (bounded concurrency), posts a parent Slack message and per-instance thread replies,
- * and uses durable `step` / `wait` / `map` so the run can resume across suspensions.
+ * in parallel (bounded concurrency), then reports the run on the configured notification channel.
+ * Logs are the default. Slack posts a parent message and per-instance thread replies. SNS publishes
+ * one plain-text message after processing. EventBridge publishes one event to the configured bus.
+ * Durable `step` / `wait` / `map` let the run resume across suspensions.
  *
  * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT`,
  * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS`, and `PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS`
  * via {@link parseResourceWaitLimitsFromEnv}, and map concurrency from
  * `PROCESS_RESOURCES_MAX_CONCURRENCY` via {@link parseMaxConcurrencyFromEnv}.
- * Loads the Slack secret via {@link secretFetcher} (Parameters and Secrets Lambda Extension).
- * Slack API failures are logged as `running-scheduler: Slack post failed` for CloudWatch log filters.
+ * Slack loads its secret via {@link secretFetcher} (Parameters and Secrets Lambda Extension).
+ * Notification send failures are logged as {@link NOTIFICATION_POST_FAILED_LOG} and do not fail the run.
  *
  * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
  * @param ctx - Root durable execution context.
  * @returns
- * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter.
+ * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter. Nothing is sent.
  * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
  * @throws {Error} If `Params` is invalid, the Slack secret is incomplete or not JSON with `token` and `channel`,
- *   instance processing fails (including `ResourceWaitFailed:*` errors),
- *   or the secret cannot be read from the extension (e.g. outside Lambda or missing `AWS_SESSION_TOKEN`).
+ *   or instance processing fails (including `ResourceWaitFailed:*` errors).
  * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not positive integers.
  * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
  * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.
@@ -296,7 +566,6 @@ const processOneResource = async (
  * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} When secret-fetch retry options are invalid.
  */
 export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: DurableContext) => {
-
   const params = event.Params;
 
   ctx.logger.info('running-scheduler: invocation', {
@@ -311,22 +580,11 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
 
   const waitLimits = parseResourceWaitLimitsFromEnv();
   const maxConcurrency = parseMaxConcurrencyFromEnv();
-
-  const slackSecretName = StrictEnvResolver.resolve('SLACK_SECRET_NAME', StrictEnvType.String);
-
-  const slackSecretValue: unknown = await ctx.step('fetch-slack-secret', async () => {
-    ctx.logger.info('running-scheduler: fetching Slack secret', { secretName: slackSecretName });
-    return secretFetcher.getSecretValue(slackSecretName, SLACK_SECRET_FETCH_OPTIONS);
-  });
-
-  ctx.logger.info('running-scheduler: Slack secret loaded');
-
-  if (!isSlackSecret(slackSecretValue)) {
-    throw new Error('Slack secret must contain token and channel.');
-  }
+  const notification = parseNotificationFromEnv();
+  const slack = await loadSlackClient(ctx, notification);
 
   const targetResources = await ctx.step('get-target-resources', async () => {
-    const client = new ResourceGroupsTaggingAPIClient({});
+    const client = new ResourceGroupsTaggingAPIClient(awsSdkClientConfig());
     const result = await client.send(
       new GetResourcesCommand({
         ResourceTypeFilters: ['ec2:instance'],
@@ -334,7 +592,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
       }),
     );
     const arns = (result.ResourceTagMappingList ?? [])
-      .map((m: { ResourceARN?: string }) => m.ResourceARN)
+      .map((mapping: { ResourceARN?: string }) => mapping.ResourceARN)
       .filter((arn: string | undefined): arn is string => arn != null);
     ctx.logger.info('running-scheduler: get-target-resources done', { count: arns.length });
     return arns;
@@ -345,33 +603,7 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
     return { status: 'TargetResourcesNotFound' as const };
   }
 
-  const client = new WebClient(slackSecretValue.token);
-  const channel = slackSecretValue.channel;
-
-  ctx.logger.info('running-scheduler: posting parent Slack message', {
-    instanceCount: targetResources.length,
-  });
-
-  // send slack message
-  const slackParentMessageResult = await ctx.step('post-slack-messages', async () => {
-    try {
-      return await client.chat.postMessage({
-        channel,
-        text: `${params.Mode === 'Start' ? '😆 Starts' : '🥱 Stops'} the scheduled EC2 Instance.`,
-      });
-    } catch (error: unknown) {
-      ctx.logger.error('running-scheduler: Slack post failed', {
-        step: 'post-slack-messages',
-        channel,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  });
-
-  ctx.logger.info('running-scheduler: parent Slack message posted', {
-    threadTs: slackParentMessageResult?.ts ?? null,
-  });
+  const threadTs = slack ? await postSlackParent(ctx, slack, params.Mode) : undefined;
 
   ctx.logger.info('running-scheduler: starting parallel instance processing', {
     count: targetResources.length,
@@ -380,62 +612,27 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
 
   const results = await ctx.map(
     targetResources,
-    // async (ctx: DurableContext, targetResource: string, index: number) =>
-    //   ctx.step(`process-resource-${index}`, async () =>
-    //     processOneResource(ctx, targetResource, params, index),
-    //   ),
-    async (mapCtx: DurableContext, targetResource: string, index: number) => {
+    async (mapCtx: DurableContext, targetResource: string, index: number): Promise<ProcessedInstance> => {
       return mapCtx.runInChildContext(`resource-${index}`, async (childCtx: DurableContext) => {
         const result = await processOneResource(childCtx, targetResource, params, index, waitLimits);
-        // if (result.status === 'skipped') {
-        //   return result;
-        // }
-        childCtx.logger.info('running-scheduler: posting thread Slack message', {
-          index,
-          identifier: result.identifier,
-          status: result.status,
-        });
-        // send slack thread message
-        await childCtx.step('post-slack-child-messages', async () => {
-          const display = getStateDisplay(result.status);
-
-          try {
-            return await client.chat.postMessage({
-              channel,
-              thread_ts: slackParentMessageResult?.ts,
-              attachments: [
-                {
-                  color: '#36a64f',
-                  pretext: `${display?.emoji} The status of the EC2 Instance ${result.identifier} changed to ${display?.name} due to the schedule.`,
-                  fields: [
-                    { title: 'Account', value: result.account, short: true },
-                    { title: 'Region', value: result.region, short: true },
-                    { title: 'Identifier', value: result.identifier, short: true },
-                    { title: 'Status', value: (display?.name ?? 'Unknown'), short: true },
-                  ],
-                },
-              ],
-            });
-          } catch (error: unknown) {
-            childCtx.logger.error('running-scheduler: Slack post failed', {
-              step: 'post-slack-child-messages',
-              channel,
-              identifier: result.identifier,
-              errorMessage: error instanceof Error ? error.message : String(error),
-            });
-            throw error;
-          }
-        });
+        if (!slack) {
+          return result;
+        }
+        await postSlackThread(childCtx, slack, threadTs, result);
         return result;
       });
     },
     { maxConcurrency },
   );
 
-  const resultList = Array.isArray(results) ? results : [];
+  results.throwIfError();
+  const resultList = results.getResults();
+  await publishSummary(ctx, notification, params.Mode, resultList);
+
   ctx.logger.info('running-scheduler: completed', {
     processed: targetResources.length,
     resultCount: resultList.length,
+    notificationChannel: notification.channel,
   });
   return {
     status: 'Completed' as const,

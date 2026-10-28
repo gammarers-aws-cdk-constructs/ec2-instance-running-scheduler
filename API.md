@@ -7,7 +7,8 @@
 Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
 
 Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
-the Resource Groups Tagging API and EC2 APIs; Slack notifications use the secret named in {@link Secrets.slackSecretName}.
+the Resource Groups Tagging API and EC2 APIs. Notification uses {@link EC2InstanceRunningSchedulerProps.notification}
+(logs only when omitted).
 
 Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
 and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
@@ -29,7 +30,7 @@ new EC2InstanceRunningScheduler(scope: Construct, id: string, props: EC2Instance
 | --- | --- | --- |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | - Parent construct. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.id">id</a></code> | <code>string</code> | - Construct id. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a></code> | - Target tags, schedules, Slack secret, schedule enable flag, optional {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps}, {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps}, and optional {@link RunningSchedulerFailureDetectionProps}. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduler.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a></code> | - Target tags, schedules, optional notification channel, schedule enable flag, optional {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps}, {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps}, and optional {@link RunningSchedulerFailureDetectionProps}. |
 
 ---
 
@@ -53,7 +54,7 @@ Construct id.
 
 - *Type:* <a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps">EC2InstanceRunningSchedulerProps</a>
 
-Target tags, schedules, Slack secret, schedule enable flag, optional {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps}, {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps}, and optional {@link RunningSchedulerFailureDetectionProps}.
+Target tags, schedules, optional notification channel, schedule enable flag, optional {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps}, {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps}, and optional {@link RunningSchedulerFailureDetectionProps}.
 
 ---
 
@@ -173,11 +174,7 @@ Failure detection alarms, when {@link EC2InstanceRunningSchedulerProps.failureDe
 
 CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
 
-Wires {@link EC2InstanceRunningScheduler} with targeting, schedules, secrets, scheduling toggle,
-and optional {@link RunningSchedulerFailureDetectionProps}. Does not expose {@link ResourceWaitLimits },
-{@link RunningSchedulerRuntimeProps }, {@link RunningSchedulerDurableProps }, or
-{@link RunningSchedulerLogGroupProps }; use the construct directly when custom runtime,
-wait, durable, or log group settings are required.
+Forwards the scheduler fields of {@link EC2InstanceRunningScheduleStackProps} to {@link EC2InstanceRunningScheduler}.
 
 #### Initializers <a name="Initializers" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer"></a>
 
@@ -191,7 +188,7 @@ new EC2InstanceRunningScheduleStack(scope: Construct, id: string, props: EC2Inst
 | --- | --- | --- |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | - Parent construct or app. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.id">id</a></code> | <code>string</code> | - Stack id. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps">EC2InstanceRunningScheduleStackProps</a></code> | - Target resource, schedules, secrets, optional failure detection, and standard stack props. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps">EC2InstanceRunningScheduleStackProps</a></code> | - Scheduler props plus standard stack props. |
 
 ---
 
@@ -215,7 +212,7 @@ Stack id.
 
 - *Type:* <a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps">EC2InstanceRunningScheduleStackProps</a>
 
-Target resource, schedules, secrets, optional failure detection, and standard stack props.
+Scheduler props plus standard stack props.
 
 ---
 
@@ -1132,219 +1129,16 @@ Whether termination protection is enabled for this stack.
 ---
 
 
-### LambdaFailureDetector <a name="LambdaFailureDetector" id="ec2-instance-running-scheduler.LambdaFailureDetector"></a>
-
-CloudWatch failure detection for a Lambda function.
-
-Always creates a platform `AWS/Lambda` `Errors` alarm. Optionally creates one
-metric filter + alarm per {@link LogFailureFilter}. Does not create an SNS topic;
-pass {@link LambdaFailureDetectorProps.alarmTopic} to attach notifications.
-
-Entry module for `lambda-failure-detector/`: import types and helpers from this file only.
-
-#### Initializers <a name="Initializers" id="ec2-instance-running-scheduler.LambdaFailureDetector.Initializer"></a>
-
-```typescript
-import { LambdaFailureDetector } from 'ec2-instance-running-scheduler'
-
-new LambdaFailureDetector(scope: Construct, id: string, props: LambdaFailureDetectorProps)
-```
-
-| **Name** | **Type** | **Description** |
-| --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.Initializer.parameter.scope">scope</a></code> | <code>constructs.Construct</code> | - Parent construct. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.Initializer.parameter.id">id</a></code> | <code>string</code> | - Construct id. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.Initializer.parameter.props">props</a></code> | <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetectorProps">LambdaFailureDetectorProps</a></code> | - Lambda, log group, optional topic, and log filters. |
-
----
-
-##### `scope`<sup>Required</sup> <a name="scope" id="ec2-instance-running-scheduler.LambdaFailureDetector.Initializer.parameter.scope"></a>
-
-- *Type:* constructs.Construct
-
-Parent construct.
-
----
-
-##### `id`<sup>Required</sup> <a name="id" id="ec2-instance-running-scheduler.LambdaFailureDetector.Initializer.parameter.id"></a>
-
-- *Type:* string
-
-Construct id.
-
----
-
-##### `props`<sup>Required</sup> <a name="props" id="ec2-instance-running-scheduler.LambdaFailureDetector.Initializer.parameter.props"></a>
-
-- *Type:* <a href="#ec2-instance-running-scheduler.LambdaFailureDetectorProps">LambdaFailureDetectorProps</a>
-
-Lambda, log group, optional topic, and log filters.
-
----
-
-#### Methods <a name="Methods" id="Methods"></a>
-
-| **Name** | **Description** |
-| --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.toString">toString</a></code> | Returns a string representation of this construct. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.with">with</a></code> | Applies one or more mixins to this construct. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.findLogFilterAlarm">findLogFilterAlarm</a></code> | Returns the log-filter alarm for the given filter id, or undefined when missing. |
-
----
-
-##### `toString` <a name="toString" id="ec2-instance-running-scheduler.LambdaFailureDetector.toString"></a>
-
-```typescript
-public toString(): string
-```
-
-Returns a string representation of this construct.
-
-##### `with` <a name="with" id="ec2-instance-running-scheduler.LambdaFailureDetector.with"></a>
-
-```typescript
-public with(mixins: ...IMixin[]): IConstruct
-```
-
-Applies one or more mixins to this construct.
-
-Mixins are applied in order. The list of constructs is captured at the
-start of the call, so constructs added by a mixin will not be visited.
-Use multiple `with()` calls if subsequent mixins should apply to added
-constructs.
-
-###### `mixins`<sup>Required</sup> <a name="mixins" id="ec2-instance-running-scheduler.LambdaFailureDetector.with.parameter.mixins"></a>
-
-- *Type:* ...constructs.IMixin[]
-
-The mixins to apply.
-
----
-
-##### `findLogFilterAlarm` <a name="findLogFilterAlarm" id="ec2-instance-running-scheduler.LambdaFailureDetector.findLogFilterAlarm"></a>
-
-```typescript
-public findLogFilterAlarm(id: string): Alarm
-```
-
-Returns the log-filter alarm for the given filter id, or undefined when missing.
-
-###### `id`<sup>Required</sup> <a name="id" id="ec2-instance-running-scheduler.LambdaFailureDetector.findLogFilterAlarm.parameter.id"></a>
-
-- *Type:* string
-
-Same as {@link LogFailureFilter.id}.
-
----
-
-#### Static Functions <a name="Static Functions" id="Static Functions"></a>
-
-| **Name** | **Description** |
-| --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.isConstruct">isConstruct</a></code> | Checks if `x` is a construct. |
-
----
-
-##### `isConstruct` <a name="isConstruct" id="ec2-instance-running-scheduler.LambdaFailureDetector.isConstruct"></a>
-
-```typescript
-import { LambdaFailureDetector } from 'ec2-instance-running-scheduler'
-
-LambdaFailureDetector.isConstruct(x: any)
-```
-
-Checks if `x` is a construct.
-
-Use this method instead of `instanceof` to properly detect `Construct`
-instances, even when the construct library is symlinked.
-
-Explanation: in JavaScript, multiple copies of the `constructs` library on
-disk are seen as independent, completely different libraries. As a
-consequence, the class `Construct` in each copy of the `constructs` library
-is seen as a different class, and an instance of one class will not test as
-`instanceof` the other class. `npm install` will not create installations
-like this, but users may manually symlink construct libraries together or
-use a monorepo tool: in those cases, multiple copies of the `constructs`
-library can be accidentally installed, and `instanceof` will behave
-unpredictably. It is safest to avoid using `instanceof`, and using
-this type-testing method instead.
-
-###### `x`<sup>Required</sup> <a name="x" id="ec2-instance-running-scheduler.LambdaFailureDetector.isConstruct.parameter.x"></a>
-
-- *Type:* any
-
-Any object.
-
----
-
-#### Properties <a name="Properties" id="Properties"></a>
-
-| **Name** | **Type** | **Description** |
-| --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.property.lambdaErrorsAlarm">lambdaErrorsAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when the Lambda `Errors` metric is non-zero. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.property.logFilterAlarms">logFilterAlarms</a></code> | <code><a href="#ec2-instance-running-scheduler.LogFailureAlarm">LogFailureAlarm</a>[]</code> | Alarms for each log filter, in the same order as {@link LambdaFailureDetectorProps.logFilters}. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetector.property.alarmTopic">alarmTopic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | SNS topic used for alarm actions, when configured. |
-
----
-
-##### `node`<sup>Required</sup> <a name="node" id="ec2-instance-running-scheduler.LambdaFailureDetector.property.node"></a>
-
-```typescript
-public readonly node: Node;
-```
-
-- *Type:* constructs.Node
-
-The tree node.
-
----
-
-##### `lambdaErrorsAlarm`<sup>Required</sup> <a name="lambdaErrorsAlarm" id="ec2-instance-running-scheduler.LambdaFailureDetector.property.lambdaErrorsAlarm"></a>
-
-```typescript
-public readonly lambdaErrorsAlarm: Alarm;
-```
-
-- *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
-
-Fires when the Lambda `Errors` metric is non-zero.
-
----
-
-##### `logFilterAlarms`<sup>Required</sup> <a name="logFilterAlarms" id="ec2-instance-running-scheduler.LambdaFailureDetector.property.logFilterAlarms"></a>
-
-```typescript
-public readonly logFilterAlarms: LogFailureAlarm[];
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.LogFailureAlarm">LogFailureAlarm</a>[]
-
-Alarms for each log filter, in the same order as {@link LambdaFailureDetectorProps.logFilters}.
-
----
-
-##### `alarmTopic`<sup>Optional</sup> <a name="alarmTopic" id="ec2-instance-running-scheduler.LambdaFailureDetector.property.alarmTopic"></a>
-
-```typescript
-public readonly alarmTopic: ITopic;
-```
-
-- *Type:* aws-cdk-lib.aws_sns.ITopic
-
-SNS topic used for alarm actions, when configured.
-
----
-
-
 ### RunningSchedulerFailureDetection <a name="RunningSchedulerFailureDetection" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection"></a>
 
 CloudWatch alarms and log-based metrics for the EC2 instance running scheduler.
 
-Extends {@link LambdaFailureDetector} with scheduler-specific log filters:
+Extends {@link LambdaFailureDetector} with scheduler-specific log filters.
+Platform alarms from `lambda-failure-detector` include `Errors` and `Throttles`.
 - `lambdaErrorsAlarm` – `AWS/Lambda` `Errors` metric.
+- `lambdaThrottlesAlarm` – `AWS/Lambda` `Throttles` metric.
 - `instanceStatusFailureAlarm` – log filter for `ResourceWaitFailed:*`.
-- `slackPostFailureAlarm` – log filter for `running-scheduler: Slack post failed`.
+- `notificationPostFailureAlarm` – log filter for `running-scheduler: notification post failed`.
 - `durableExecutionFailureAlarm` – other handler-level `ERROR` logs (excluding the above).
 
 Custom metrics are published under the `EC2InstanceRunningScheduler` namespace.
@@ -1490,11 +1284,16 @@ Any object.
 | --- | --- | --- |
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.node">node</a></code> | <code>constructs.Node</code> | The tree node. |
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.lambdaErrorsAlarm">lambdaErrorsAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when the Lambda `Errors` metric is non-zero. |
-| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.logFilterAlarms">logFilterAlarms</a></code> | <code><a href="#ec2-instance-running-scheduler.LogFailureAlarm">LogFailureAlarm</a>[]</code> | Alarms for each log filter, in the same order as {@link LambdaFailureDetectorProps.logFilters}. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.lambdaThrottlesAlarm">lambdaThrottlesAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when the Lambda `Throttles` metric is non-zero. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.logFilterAlarms">logFilterAlarms</a></code> | <code>lambda-failure-detector.LogFailureAlarm[]</code> | Alarms for each log filter, in the same order as {@link LambdaFailureDetectorProps.logFilters}. |
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.alarmTopic">alarmTopic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | SNS topic used for alarm actions, when configured. |
-| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.durableExecutionFailureAlarm">durableExecutionFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires on handler-level ERROR logs outside instance waiting and Slack post failures. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.deadLetterErrorsAlarm">deadLetterErrorsAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when `DeadLetterErrors` is non-zero, when opted in. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.destinationDeliveryFailuresAlarm">destinationDeliveryFailuresAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when `DestinationDeliveryFailures` is non-zero, when opted in. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.iteratorAgeAlarm">iteratorAgeAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when stream `IteratorAge` reaches the configured threshold, when opted in. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.logGroup">logGroup</a></code> | <code>aws-cdk-lib.aws_logs.ILogGroup</code> | Log group used for log metric filters, when log filters are configured. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.durableExecutionFailureAlarm">durableExecutionFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires on handler-level ERROR logs outside instance waiting and notification post failures. |
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.instanceStatusFailureAlarm">instanceStatusFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when instance stable-state waiting fails (`ResourceWaitFailed:*`). |
-| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.slackPostFailureAlarm">slackPostFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when Slack `chat.postMessage` fails. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.notificationPostFailureAlarm">notificationPostFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when a configured Slack, SNS, or EventBridge notification send fails. |
 
 ---
 
@@ -1522,13 +1321,25 @@ Fires when the Lambda `Errors` metric is non-zero.
 
 ---
 
+##### `lambdaThrottlesAlarm`<sup>Required</sup> <a name="lambdaThrottlesAlarm" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.lambdaThrottlesAlarm"></a>
+
+```typescript
+public readonly lambdaThrottlesAlarm: Alarm;
+```
+
+- *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
+
+Fires when the Lambda `Throttles` metric is non-zero.
+
+---
+
 ##### `logFilterAlarms`<sup>Required</sup> <a name="logFilterAlarms" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.logFilterAlarms"></a>
 
 ```typescript
 public readonly logFilterAlarms: LogFailureAlarm[];
 ```
 
-- *Type:* <a href="#ec2-instance-running-scheduler.LogFailureAlarm">LogFailureAlarm</a>[]
+- *Type:* lambda-failure-detector.LogFailureAlarm[]
 
 Alarms for each log filter, in the same order as {@link LambdaFailureDetectorProps.logFilters}.
 
@@ -1546,6 +1357,56 @@ SNS topic used for alarm actions, when configured.
 
 ---
 
+##### `deadLetterErrorsAlarm`<sup>Optional</sup> <a name="deadLetterErrorsAlarm" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.deadLetterErrorsAlarm"></a>
+
+```typescript
+public readonly deadLetterErrorsAlarm: Alarm;
+```
+
+- *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
+
+Fires when `DeadLetterErrors` is non-zero, when opted in.
+
+---
+
+##### `destinationDeliveryFailuresAlarm`<sup>Optional</sup> <a name="destinationDeliveryFailuresAlarm" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.destinationDeliveryFailuresAlarm"></a>
+
+```typescript
+public readonly destinationDeliveryFailuresAlarm: Alarm;
+```
+
+- *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
+
+Fires when `DestinationDeliveryFailures` is non-zero, when opted in.
+
+---
+
+##### `iteratorAgeAlarm`<sup>Optional</sup> <a name="iteratorAgeAlarm" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.iteratorAgeAlarm"></a>
+
+```typescript
+public readonly iteratorAgeAlarm: Alarm;
+```
+
+- *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
+
+Fires when stream `IteratorAge` reaches the configured threshold, when opted in.
+
+---
+
+##### `logGroup`<sup>Optional</sup> <a name="logGroup" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.logGroup"></a>
+
+```typescript
+public readonly logGroup: ILogGroup;
+```
+
+- *Type:* aws-cdk-lib.aws_logs.ILogGroup
+
+Log group used for log metric filters, when log filters are configured.
+
+Undefined when there are no log filters.
+
+---
+
 ##### `durableExecutionFailureAlarm`<sup>Required</sup> <a name="durableExecutionFailureAlarm" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.durableExecutionFailureAlarm"></a>
 
 ```typescript
@@ -1554,7 +1415,7 @@ public readonly durableExecutionFailureAlarm: Alarm;
 
 - *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
 
-Fires on handler-level ERROR logs outside instance waiting and Slack post failures.
+Fires on handler-level ERROR logs outside instance waiting and notification post failures.
 
 ---
 
@@ -1570,94 +1431,20 @@ Fires when instance stable-state waiting fails (`ResourceWaitFailed:*`).
 
 ---
 
-##### `slackPostFailureAlarm`<sup>Required</sup> <a name="slackPostFailureAlarm" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.slackPostFailureAlarm"></a>
+##### `notificationPostFailureAlarm`<sup>Required</sup> <a name="notificationPostFailureAlarm" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.notificationPostFailureAlarm"></a>
 
 ```typescript
-public readonly slackPostFailureAlarm: Alarm;
+public readonly notificationPostFailureAlarm: Alarm;
 ```
 
 - *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
 
-Fires when Slack `chat.postMessage` fails.
+Fires when a configured Slack, SNS, or EventBridge notification send fails.
 
 ---
 
 
 ## Structs <a name="Structs" id="Structs"></a>
-
-### CreateLambdaFailureDetectorProps <a name="CreateLambdaFailureDetectorProps" id="ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps"></a>
-
-Props accepted by {@link createLambdaFailureDetector}.
-
-#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.Initializer"></a>
-
-```typescript
-import { CreateLambdaFailureDetectorProps } from 'ec2-instance-running-scheduler'
-
-const createLambdaFailureDetectorProps: CreateLambdaFailureDetectorProps = { ... }
-```
-
-#### Properties <a name="Properties" id="Properties"></a>
-
-| **Name** | **Type** | **Description** |
-| --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.property.lambdaFunction">lambdaFunction</a></code> | <code>aws-cdk-lib.aws_lambda.IFunction</code> | Lambda function to monitor. |
-| <code><a href="#ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.property.logGroup">logGroup</a></code> | <code>aws-cdk-lib.aws_logs.ILogGroup</code> | Application log group for log-based filters. |
-| <code><a href="#ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.property.failureDetection">failureDetection</a></code> | <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetection">LambdaFailureDetection</a></code> | Opt-in options; |
-| <code><a href="#ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.property.logFilters">logFilters</a></code> | <code><a href="#ec2-instance-running-scheduler.LogFailureFilter">LogFailureFilter</a>[]</code> | Log-based failure filters. |
-
----
-
-##### `lambdaFunction`<sup>Required</sup> <a name="lambdaFunction" id="ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.property.lambdaFunction"></a>
-
-```typescript
-public readonly lambdaFunction: IFunction;
-```
-
-- *Type:* aws-cdk-lib.aws_lambda.IFunction
-
-Lambda function to monitor.
-
----
-
-##### `logGroup`<sup>Required</sup> <a name="logGroup" id="ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.property.logGroup"></a>
-
-```typescript
-public readonly logGroup: ILogGroup;
-```
-
-- *Type:* aws-cdk-lib.aws_logs.ILogGroup
-
-Application log group for log-based filters.
-
----
-
-##### `failureDetection`<sup>Optional</sup> <a name="failureDetection" id="ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.property.failureDetection"></a>
-
-```typescript
-public readonly failureDetection: LambdaFailureDetection;
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.LambdaFailureDetection">LambdaFailureDetection</a>
-
-Opt-in options;
-
-alarms are created only when {@link LambdaFailureDetection.enabled} is true.
-
----
-
-##### `logFilters`<sup>Optional</sup> <a name="logFilters" id="ec2-instance-running-scheduler.CreateLambdaFailureDetectorProps.property.logFilters"></a>
-
-```typescript
-public readonly logFilters: LogFailureFilter[];
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.LogFailureFilter">LogFailureFilter</a>[]
-- *Default:* no log-based alarms
-
-Log-based failure filters.
-
----
 
 ### EC2InstanceRunningSchedulerProps <a name="EC2InstanceRunningSchedulerProps" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps"></a>
 
@@ -1675,28 +1462,16 @@ const eC2InstanceRunningSchedulerProps: EC2InstanceRunningSchedulerProps = { ...
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.secrets">secrets</a></code> | <code><a href="#ec2-instance-running-scheduler.Secrets">Secrets</a></code> | Secrets (e.g. Slack) used for notifications. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.targetResource">targetResource</a></code> | <code><a href="#ec2-instance-running-scheduler.TargetResource">TargetResource</a></code> | Tag-based targeting for EC2 instances to start/stop. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.durable">durable</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerDurableProps">RunningSchedulerDurableProps</a></code> | Durable Execution timeout and history retention. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.enableScheduling">enableScheduling</a></code> | <code>boolean</code> | Whether EventBridge Scheduler rules are enabled. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.failureDetection">failureDetection</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionProps">RunningSchedulerFailureDetectionProps</a></code> | Optional CloudWatch alarms and log-based metrics for failure detection. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.logGroup">logGroup</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerLogGroupProps">RunningSchedulerLogGroupProps</a></code> | CloudWatch Logs retention and removal policy for the function log group. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.notification">notification</a></code> | <code><a href="#ec2-instance-running-scheduler.SlackNotification">SlackNotification</a> \| <a href="#ec2-instance-running-scheduler.SnsNotification">SnsNotification</a> \| <a href="#ec2-instance-running-scheduler.EventBridgeNotification">EventBridgeNotification</a></code> | Where to report a completed run. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.resourceWait">resourceWait</a></code> | <code><a href="#ec2-instance-running-scheduler.ResourceWaitLimits">ResourceWaitLimits</a></code> | Per-instance wait limits for the running scheduler Lambda. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.runtime">runtime</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerRuntimeProps">RunningSchedulerRuntimeProps</a></code> | Lambda memory, invoke timeout, and per-invocation instance concurrency. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.startSchedule">startSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for starting instances. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.stopSchedule">stopSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for stopping instances. |
-
----
-
-##### `secrets`<sup>Required</sup> <a name="secrets" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.secrets"></a>
-
-```typescript
-public readonly secrets: Secrets;
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.Secrets">Secrets</a>
-
-Secrets (e.g. Slack) used for notifications.
 
 ---
 
@@ -1761,9 +1536,22 @@ public readonly logGroup: RunningSchedulerLogGroupProps;
 ```
 
 - *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerLogGroupProps">RunningSchedulerLogGroupProps</a>
-- *Default:* RetentionDays.THREE_MONTHS, RemovalPolicy.DESTROY
+- *Default:* RetentionDays.THREE_MONTHS, RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE
 
 CloudWatch Logs retention and removal policy for the function log group.
+
+---
+
+##### `notification`<sup>Optional</sup> <a name="notification" id="ec2-instance-running-scheduler.EC2InstanceRunningSchedulerProps.property.notification"></a>
+
+```typescript
+public readonly notification: SlackNotification | SnsNotification | EventBridgeNotification;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.SlackNotification">SlackNotification</a> | <a href="#ec2-instance-running-scheduler.SnsNotification">SnsNotification</a> | <a href="#ec2-instance-running-scheduler.EventBridgeNotification">EventBridgeNotification</a>
+- *Default:* logs only (no Slack, SNS, or EventBridge permissions)
+
+Where to report a completed run.
 
 ---
 
@@ -1774,7 +1562,7 @@ public readonly resourceWait: ResourceWaitLimits;
 ```
 
 - *Type:* <a href="#ec2-instance-running-scheduler.ResourceWaitLimits">ResourceWaitLimits</a>
-- *Default:* {@link DEFAULT_RESOURCE_WAIT_LIMITS }
+- *Default:* {@link DEFAULT_MAX_LOOP_COUNT }, {@link DEFAULT_MAX_ELAPSED_SECONDS }, {@link DEFAULT_STATUS_CHANGE_WAIT_SECONDS }
 
 Per-instance wait limits for the running scheduler Lambda.
 
@@ -1821,9 +1609,7 @@ Cron schedule for stopping instances.
 
 Props for the EC2 instance running schedule CDK stack.
 
-> [{@link EC2InstanceRunningSchedulerProps } for construct-level options not exposed here
-(e.g. `resourceWait`, `runtime`, `durable`, `logGroup`).]({@link EC2InstanceRunningSchedulerProps } for construct-level options not exposed here
-(e.g. `resourceWait`, `runtime`, `durable`, `logGroup`).)
+Scheduler fields match {@link EC2InstanceRunningSchedulerProps}. Stack settings such as `env` stay on the stack.
 
 #### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.Initializer"></a>
 
@@ -1837,6 +1623,16 @@ const eC2InstanceRunningScheduleStackProps: EC2InstanceRunningScheduleStackProps
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.targetResource">targetResource</a></code> | <code><a href="#ec2-instance-running-scheduler.TargetResource">TargetResource</a></code> | Tag-based targeting for EC2 instances to start/stop. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.durable">durable</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerDurableProps">RunningSchedulerDurableProps</a></code> | Durable Execution timeout and history retention. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.enableScheduling">enableScheduling</a></code> | <code>boolean</code> | Whether EventBridge Scheduler rules are enabled. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.failureDetection">failureDetection</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionProps">RunningSchedulerFailureDetectionProps</a></code> | Optional CloudWatch alarms and log-based metrics for failure detection. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.logGroup">logGroup</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerLogGroupProps">RunningSchedulerLogGroupProps</a></code> | CloudWatch Logs retention and removal policy for the function log group. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.notification">notification</a></code> | <code><a href="#ec2-instance-running-scheduler.SlackNotification">SlackNotification</a> \| <a href="#ec2-instance-running-scheduler.SnsNotification">SnsNotification</a> \| <a href="#ec2-instance-running-scheduler.EventBridgeNotification">EventBridgeNotification</a></code> | Where to report a completed run. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.resourceWait">resourceWait</a></code> | <code><a href="#ec2-instance-running-scheduler.ResourceWaitLimits">ResourceWaitLimits</a></code> | Per-instance wait limits for the running scheduler Lambda. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.runtime">runtime</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerRuntimeProps">RunningSchedulerRuntimeProps</a></code> | Lambda memory, invoke timeout, and per-invocation instance concurrency. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.startSchedule">startSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for starting instances. |
+| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.stopSchedule">stopSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for stopping instances. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.analyticsReporting">analyticsReporting</a></code> | <code>boolean</code> | Include runtime versioning information in this Stack. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.crossRegionReferences">crossRegionReferences</a></code> | <code>boolean</code> | Enable this flag to allow native cross region stack references. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.description">description</a></code> | <code>string</code> | A description of the stack. |
@@ -1849,12 +1645,136 @@ const eC2InstanceRunningScheduleStackProps: EC2InstanceRunningScheduleStackProps
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.synthesizer">synthesizer</a></code> | <code>aws-cdk-lib.IStackSynthesizer</code> | Synthesis method to use while deploying this stack. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.tags">tags</a></code> | <code>{[ key: string ]: string}</code> | Tags that will be applied to the Stack. |
 | <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.terminationProtection">terminationProtection</a></code> | <code>boolean</code> | Whether to enable termination protection for this stack. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.secrets">secrets</a></code> | <code><a href="#ec2-instance-running-scheduler.Secrets">Secrets</a></code> | Secrets (e.g. Slack) for the scheduler. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.targetResource">targetResource</a></code> | <code><a href="#ec2-instance-running-scheduler.TargetResource">TargetResource</a></code> | Tag-based target resource for EC2 instances to start/stop. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.enableScheduling">enableScheduling</a></code> | <code>boolean</code> | Whether scheduling is enabled. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.failureDetection">failureDetection</a></code> | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionProps">RunningSchedulerFailureDetectionProps</a></code> | Optional CloudWatch failure detection alarms and log-based metrics. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.startSchedule">startSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for starting instances. |
-| <code><a href="#ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.stopSchedule">stopSchedule</a></code> | <code><a href="#ec2-instance-running-scheduler.Schedule">Schedule</a></code> | Cron schedule for stopping instances. |
+
+---
+
+##### `targetResource`<sup>Required</sup> <a name="targetResource" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.targetResource"></a>
+
+```typescript
+public readonly targetResource: TargetResource;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.TargetResource">TargetResource</a>
+
+Tag-based targeting for EC2 instances to start/stop.
+
+---
+
+##### `durable`<sup>Optional</sup> <a name="durable" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.durable"></a>
+
+```typescript
+public readonly durable: RunningSchedulerDurableProps;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerDurableProps">RunningSchedulerDurableProps</a>
+- *Default:* executionTimeout 2 hours, retentionPeriod 1 day
+
+Durable Execution timeout and history retention.
+
+---
+
+##### `enableScheduling`<sup>Optional</sup> <a name="enableScheduling" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.enableScheduling"></a>
+
+```typescript
+public readonly enableScheduling: boolean;
+```
+
+- *Type:* boolean
+
+Whether EventBridge Scheduler rules are enabled.
+
+Defaults to true if omitted.
+
+---
+
+##### `failureDetection`<sup>Optional</sup> <a name="failureDetection" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.failureDetection"></a>
+
+```typescript
+public readonly failureDetection: RunningSchedulerFailureDetectionProps;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionProps">RunningSchedulerFailureDetectionProps</a>
+- *Default:* disabled when omitted
+
+Optional CloudWatch alarms and log-based metrics for failure detection.
+
+Set `enabled: true` to create alarms; optionally pass `alarmTopic` for SNS notifications.
+
+---
+
+##### `logGroup`<sup>Optional</sup> <a name="logGroup" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.logGroup"></a>
+
+```typescript
+public readonly logGroup: RunningSchedulerLogGroupProps;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerLogGroupProps">RunningSchedulerLogGroupProps</a>
+- *Default:* RetentionDays.THREE_MONTHS, RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE
+
+CloudWatch Logs retention and removal policy for the function log group.
+
+---
+
+##### `notification`<sup>Optional</sup> <a name="notification" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.notification"></a>
+
+```typescript
+public readonly notification: SlackNotification | SnsNotification | EventBridgeNotification;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.SlackNotification">SlackNotification</a> | <a href="#ec2-instance-running-scheduler.SnsNotification">SnsNotification</a> | <a href="#ec2-instance-running-scheduler.EventBridgeNotification">EventBridgeNotification</a>
+- *Default:* logs only (no Slack, SNS, or EventBridge permissions)
+
+Where to report a completed run.
+
+---
+
+##### `resourceWait`<sup>Optional</sup> <a name="resourceWait" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.resourceWait"></a>
+
+```typescript
+public readonly resourceWait: ResourceWaitLimits;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.ResourceWaitLimits">ResourceWaitLimits</a>
+- *Default:* {@link DEFAULT_MAX_LOOP_COUNT }, {@link DEFAULT_MAX_ELAPSED_SECONDS }, {@link DEFAULT_STATUS_CHANGE_WAIT_SECONDS }
+
+Per-instance wait limits for the running scheduler Lambda.
+
+---
+
+##### `runtime`<sup>Optional</sup> <a name="runtime" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.runtime"></a>
+
+```typescript
+public readonly runtime: RunningSchedulerRuntimeProps;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerRuntimeProps">RunningSchedulerRuntimeProps</a>
+- *Default:* 512 MB, 15 minutes, {@link DEFAULT_MAX_CONCURRENCY } (10)
+
+Lambda memory, invoke timeout, and per-invocation instance concurrency.
+
+---
+
+##### `startSchedule`<sup>Optional</sup> <a name="startSchedule" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.startSchedule"></a>
+
+```typescript
+public readonly startSchedule: Schedule;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.Schedule">Schedule</a>
+
+Cron schedule for starting instances.
+
+---
+
+##### `stopSchedule`<sup>Optional</sup> <a name="stopSchedule" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.stopSchedule"></a>
+
+```typescript
+public readonly stopSchedule: Schedule;
+```
+
+- *Type:* <a href="#ec2-instance-running-scheduler.Schedule">Schedule</a>
+
+Cron schedule for stopping instances.
 
 ---
 
@@ -2102,330 +2022,50 @@ Whether to enable termination protection for this stack.
 
 ---
 
-##### `secrets`<sup>Required</sup> <a name="secrets" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.secrets"></a>
+### EventBridgeNotification <a name="EventBridgeNotification" id="ec2-instance-running-scheduler.EventBridgeNotification"></a>
+
+EventBridge custom-bus notification.
+
+The construct grants `events:PutEvents` and does not create the bus or rules.
+
+#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.EventBridgeNotification.Initializer"></a>
 
 ```typescript
-public readonly secrets: Secrets;
-```
+import { EventBridgeNotification } from 'ec2-instance-running-scheduler'
 
-- *Type:* <a href="#ec2-instance-running-scheduler.Secrets">Secrets</a>
-
-Secrets (e.g. Slack) for the scheduler.
-
----
-
-##### `targetResource`<sup>Required</sup> <a name="targetResource" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.targetResource"></a>
-
-```typescript
-public readonly targetResource: TargetResource;
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.TargetResource">TargetResource</a>
-
-Tag-based target resource for EC2 instances to start/stop.
-
----
-
-##### `enableScheduling`<sup>Optional</sup> <a name="enableScheduling" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.enableScheduling"></a>
-
-```typescript
-public readonly enableScheduling: boolean;
-```
-
-- *Type:* boolean
-
-Whether scheduling is enabled.
-
-Defaults to true if omitted.
-
----
-
-##### `failureDetection`<sup>Optional</sup> <a name="failureDetection" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.failureDetection"></a>
-
-```typescript
-public readonly failureDetection: RunningSchedulerFailureDetectionProps;
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionProps">RunningSchedulerFailureDetectionProps</a>
-
-Optional CloudWatch failure detection alarms and log-based metrics.
-
----
-
-##### `startSchedule`<sup>Optional</sup> <a name="startSchedule" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.startSchedule"></a>
-
-```typescript
-public readonly startSchedule: Schedule;
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.Schedule">Schedule</a>
-
-Cron schedule for starting instances.
-
----
-
-##### `stopSchedule`<sup>Optional</sup> <a name="stopSchedule" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStackProps.property.stopSchedule"></a>
-
-```typescript
-public readonly stopSchedule: Schedule;
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.Schedule">Schedule</a>
-
-Cron schedule for stopping instances.
-
----
-
-### LambdaFailureDetection <a name="LambdaFailureDetection" id="ec2-instance-running-scheduler.LambdaFailureDetection"></a>
-
-Opt-in options for {@link LambdaFailureDetector }.
-
-When {@link LambdaFailureDetection.enabled} is true, alarms are created.
-{@link LambdaFailureDetection.alarmTopic} is optional; when omitted, alarms have no SNS actions.
-The construct never creates an SNS topic.
-
-#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.LambdaFailureDetection.Initializer"></a>
-
-```typescript
-import { LambdaFailureDetection } from 'ec2-instance-running-scheduler'
-
-const lambdaFailureDetection: LambdaFailureDetection = { ... }
+const eventBridgeNotification: EventBridgeNotification = { ... }
 ```
 
 #### Properties <a name="Properties" id="Properties"></a>
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetection.property.alarmTopic">alarmTopic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | SNS topic for alarm notifications. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetection.property.enabled">enabled</a></code> | <code>boolean</code> | When true, creates failure detection alarms and log-based metrics. |
+| <code><a href="#ec2-instance-running-scheduler.EventBridgeNotification.property.channel">channel</a></code> | <code>string</code> | Selects an EventBridge custom bus. |
+| <code><a href="#ec2-instance-running-scheduler.EventBridgeNotification.property.eventBus">eventBus</a></code> | <code>aws-cdk-lib.aws_events.IEventBus</code> | Existing custom event bus. |
 
 ---
 
-##### `alarmTopic`<sup>Optional</sup> <a name="alarmTopic" id="ec2-instance-running-scheduler.LambdaFailureDetection.property.alarmTopic"></a>
+##### `channel`<sup>Required</sup> <a name="channel" id="ec2-instance-running-scheduler.EventBridgeNotification.property.channel"></a>
 
 ```typescript
-public readonly alarmTopic: ITopic;
-```
-
-- *Type:* aws-cdk-lib.aws_sns.ITopic
-
-SNS topic for alarm notifications.
-
-When omitted, alarms are created without SNS actions.
-
----
-
-##### `enabled`<sup>Optional</sup> <a name="enabled" id="ec2-instance-running-scheduler.LambdaFailureDetection.property.enabled"></a>
-
-```typescript
-public readonly enabled: boolean;
-```
-
-- *Type:* boolean
-- *Default:* false when omitted
-
-When true, creates failure detection alarms and log-based metrics.
-
----
-
-### LambdaFailureDetectorProps <a name="LambdaFailureDetectorProps" id="ec2-instance-running-scheduler.LambdaFailureDetectorProps"></a>
-
-Props for {@link LambdaFailureDetector}.
-
-#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.LambdaFailureDetectorProps.Initializer"></a>
-
-```typescript
-import { LambdaFailureDetectorProps } from 'ec2-instance-running-scheduler'
-
-const lambdaFailureDetectorProps: LambdaFailureDetectorProps = { ... }
-```
-
-#### Properties <a name="Properties" id="Properties"></a>
-
-| **Name** | **Type** | **Description** |
-| --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetectorProps.property.lambdaFunction">lambdaFunction</a></code> | <code>aws-cdk-lib.aws_lambda.IFunction</code> | Lambda function whose platform `Errors` metric is alarmed. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetectorProps.property.logGroup">logGroup</a></code> | <code>aws-cdk-lib.aws_logs.ILogGroup</code> | Log group used for {@link LogFailureFilter} metric filters. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetectorProps.property.alarmTopic">alarmTopic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | Optional SNS topic for all alarm actions. |
-| <code><a href="#ec2-instance-running-scheduler.LambdaFailureDetectorProps.property.logFilters">logFilters</a></code> | <code><a href="#ec2-instance-running-scheduler.LogFailureFilter">LogFailureFilter</a>[]</code> | Log-based failure filters. |
-
----
-
-##### `lambdaFunction`<sup>Required</sup> <a name="lambdaFunction" id="ec2-instance-running-scheduler.LambdaFailureDetectorProps.property.lambdaFunction"></a>
-
-```typescript
-public readonly lambdaFunction: IFunction;
-```
-
-- *Type:* aws-cdk-lib.aws_lambda.IFunction
-
-Lambda function whose platform `Errors` metric is alarmed.
-
----
-
-##### `logGroup`<sup>Required</sup> <a name="logGroup" id="ec2-instance-running-scheduler.LambdaFailureDetectorProps.property.logGroup"></a>
-
-```typescript
-public readonly logGroup: ILogGroup;
-```
-
-- *Type:* aws-cdk-lib.aws_logs.ILogGroup
-
-Log group used for {@link LogFailureFilter} metric filters.
-
----
-
-##### `alarmTopic`<sup>Optional</sup> <a name="alarmTopic" id="ec2-instance-running-scheduler.LambdaFailureDetectorProps.property.alarmTopic"></a>
-
-```typescript
-public readonly alarmTopic: ITopic;
-```
-
-- *Type:* aws-cdk-lib.aws_sns.ITopic
-
-Optional SNS topic for all alarm actions.
-
-When omitted, alarms are created without SNS actions.
-
----
-
-##### `logFilters`<sup>Optional</sup> <a name="logFilters" id="ec2-instance-running-scheduler.LambdaFailureDetectorProps.property.logFilters"></a>
-
-```typescript
-public readonly logFilters: LogFailureFilter[];
-```
-
-- *Type:* <a href="#ec2-instance-running-scheduler.LogFailureFilter">LogFailureFilter</a>[]
-- *Default:* no log-based alarms
-
-Log-based failure filters.
-
-Each entry creates a metric filter and alarm.
-
----
-
-### LogFailureAlarm <a name="LogFailureAlarm" id="ec2-instance-running-scheduler.LogFailureAlarm"></a>
-
-Alarm created for one {@link LogFailureFilter}.
-
-#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.LogFailureAlarm.Initializer"></a>
-
-```typescript
-import { LogFailureAlarm } from 'ec2-instance-running-scheduler'
-
-const logFailureAlarm: LogFailureAlarm = { ... }
-```
-
-#### Properties <a name="Properties" id="Properties"></a>
-
-| **Name** | **Type** | **Description** |
-| --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.LogFailureAlarm.property.alarm">alarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Alarm on the log metric filter sum. |
-| <code><a href="#ec2-instance-running-scheduler.LogFailureAlarm.property.id">id</a></code> | <code>string</code> | Same as {@link LogFailureFilter.id}. |
-
----
-
-##### `alarm`<sup>Required</sup> <a name="alarm" id="ec2-instance-running-scheduler.LogFailureAlarm.property.alarm"></a>
-
-```typescript
-public readonly alarm: Alarm;
-```
-
-- *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
-
-Alarm on the log metric filter sum.
-
----
-
-##### `id`<sup>Required</sup> <a name="id" id="ec2-instance-running-scheduler.LogFailureAlarm.property.id"></a>
-
-```typescript
-public readonly id: string;
+public readonly channel: string;
 ```
 
 - *Type:* string
 
-Same as {@link LogFailureFilter.id}.
+Selects an EventBridge custom bus.
 
 ---
 
-### LogFailureFilter <a name="LogFailureFilter" id="ec2-instance-running-scheduler.LogFailureFilter"></a>
-
-One log-based failure signal for {@link LambdaFailureDetector }.
-
-Creates a CloudWatch Logs metric filter and an alarm on the resulting sum metric.
-
-#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.LogFailureFilter.Initializer"></a>
+##### `eventBus`<sup>Required</sup> <a name="eventBus" id="ec2-instance-running-scheduler.EventBridgeNotification.property.eventBus"></a>
 
 ```typescript
-import { LogFailureFilter } from 'ec2-instance-running-scheduler'
-
-const logFailureFilter: LogFailureFilter = { ... }
+public readonly eventBus: IEventBus;
 ```
 
-#### Properties <a name="Properties" id="Properties"></a>
+- *Type:* aws-cdk-lib.aws_events.IEventBus
 
-| **Name** | **Type** | **Description** |
-| --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.LogFailureFilter.property.filterPattern">filterPattern</a></code> | <code>string</code> | CloudWatch Logs filter pattern string passed to `FilterPattern.literal`. |
-| <code><a href="#ec2-instance-running-scheduler.LogFailureFilter.property.id">id</a></code> | <code>string</code> | Stable id used as the MetricFilter / Alarm construct id prefix (e.g. `InstanceStatusFailure` → `InstanceStatusFailureMetric`). |
-| <code><a href="#ec2-instance-running-scheduler.LogFailureFilter.property.metricName">metricName</a></code> | <code>string</code> | Custom metric name for the metric filter. |
-| <code><a href="#ec2-instance-running-scheduler.LogFailureFilter.property.metricNamespace">metricNamespace</a></code> | <code>string</code> | Custom metric namespace for the metric filter. |
-
----
-
-##### `filterPattern`<sup>Required</sup> <a name="filterPattern" id="ec2-instance-running-scheduler.LogFailureFilter.property.filterPattern"></a>
-
-```typescript
-public readonly filterPattern: string;
-```
-
-- *Type:* string
-
-CloudWatch Logs filter pattern string passed to `FilterPattern.literal`.
-
----
-
-*Example*
-
-```typescript
-'"ResourceWaitFailed"'
-```
-
-
-##### `id`<sup>Required</sup> <a name="id" id="ec2-instance-running-scheduler.LogFailureFilter.property.id"></a>
-
-```typescript
-public readonly id: string;
-```
-
-- *Type:* string
-
-Stable id used as the MetricFilter / Alarm construct id prefix (e.g. `InstanceStatusFailure` → `InstanceStatusFailureMetric`).
-
----
-
-##### `metricName`<sup>Required</sup> <a name="metricName" id="ec2-instance-running-scheduler.LogFailureFilter.property.metricName"></a>
-
-```typescript
-public readonly metricName: string;
-```
-
-- *Type:* string
-
-Custom metric name for the metric filter.
-
----
-
-##### `metricNamespace`<sup>Required</sup> <a name="metricNamespace" id="ec2-instance-running-scheduler.LogFailureFilter.property.metricNamespace"></a>
-
-```typescript
-public readonly metricNamespace: string;
-```
-
-- *Type:* string
-
-Custom metric namespace for the metric filter.
+Existing custom event bus.
 
 ---
 
@@ -2433,11 +2073,12 @@ Custom metric namespace for the metric filter.
 
 CDK-side limits for per-instance stable-state waiting in the Durable Lambda handler.
 
-Optional fields map to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV} and
-{@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV} on the running scheduler function.
+Optional fields map to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV},
+{@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV}, and
+{@link PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV} on the running scheduler function.
 Prevents abnormal or stuck transitions from running until the Durable execution timeout.
 
-> [{@link ResourceWaitLimits } in `running-scheduler-predicates.ts` for the handler-side required shape.]({@link ResourceWaitLimits } in `running-scheduler-predicates.ts` for the handler-side required shape.)
+The handler reads the same numbers from its environment and applies them as required limits.
 
 #### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.ResourceWaitLimits.Initializer"></a>
 
@@ -2464,7 +2105,7 @@ public readonly maxElapsedSeconds: number;
 ```
 
 - *Type:* number
-- *Default:* {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds } (1800, 30 minutes)
+- *Default:* {@link DEFAULT_MAX_ELAPSED_SECONDS } (1800, 30 minutes)
 
 Maximum wall-clock seconds spent waiting for a single instance to stabilize.
 
@@ -2477,7 +2118,7 @@ public readonly maxLoopCount: number;
 ```
 
 - *Type:* number
-- *Default:* {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount } (90)
+- *Default:* {@link DEFAULT_MAX_LOOP_COUNT } (90)
 
 Maximum describe/wait loop iterations per instance.
 
@@ -2490,7 +2131,7 @@ public readonly statusChangeWaitSeconds: number;
 ```
 
 - *Type:* number
-- *Default:* {@link DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds } (20)
+- *Default:* {@link DEFAULT_STATUS_CHANGE_WAIT_SECONDS } (20)
 
 Seconds to wait between describe iterations after start/stop or while transitioning.
 
@@ -2549,7 +2190,7 @@ How long to retain durable execution history.
 
 ### RunningSchedulerFailureDetectionProps <a name="RunningSchedulerFailureDetectionProps" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetectionProps"></a>
 
-Opt-in failure detection for `EC2InstanceRunningScheduler`.
+Opt-in failure detection for {@link EC2InstanceRunningScheduler }.
 
 Pass as `EC2InstanceRunningSchedulerProps.failureDetection`. Extends
 {@link LambdaFailureDetection} (`enabled` / `alarmTopic`). Which log failures are
@@ -2618,9 +2259,9 @@ const runningSchedulerFailureDetectionResourcesProps: RunningSchedulerFailureDet
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionResourcesProps.property.logGroup">logGroup</a></code> | <code>aws-cdk-lib.aws_logs.ILogGroup</code> | *No description.* |
-| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionResourcesProps.property.runningScheduleFunction">runningScheduleFunction</a></code> | <code>aws-cdk-lib.aws_lambda.IFunction</code> | *No description.* |
-| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionResourcesProps.property.alarmTopic">alarmTopic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | *No description.* |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionResourcesProps.property.logGroup">logGroup</a></code> | <code>aws-cdk-lib.aws_logs.ILogGroup</code> | Application log group used by the scheduler log filters. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionResourcesProps.property.runningScheduleFunction">runningScheduleFunction</a></code> | <code>aws-cdk-lib.aws_lambda.IFunction</code> | Running scheduler Lambda whose platform metrics are alarmed. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetectionResourcesProps.property.alarmTopic">alarmTopic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | Existing SNS topic for alarm actions. |
 
 ---
 
@@ -2632,6 +2273,8 @@ public readonly logGroup: ILogGroup;
 
 - *Type:* aws-cdk-lib.aws_logs.ILogGroup
 
+Application log group used by the scheduler log filters.
+
 ---
 
 ##### `runningScheduleFunction`<sup>Required</sup> <a name="runningScheduleFunction" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetectionResourcesProps.property.runningScheduleFunction"></a>
@@ -2642,6 +2285,8 @@ public readonly runningScheduleFunction: IFunction;
 
 - *Type:* aws-cdk-lib.aws_lambda.IFunction
 
+Running scheduler Lambda whose platform metrics are alarmed.
+
 ---
 
 ##### `alarmTopic`<sup>Optional</sup> <a name="alarmTopic" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetectionResourcesProps.property.alarmTopic"></a>
@@ -2651,6 +2296,10 @@ public readonly alarmTopic: ITopic;
 ```
 
 - *Type:* aws-cdk-lib.aws_sns.ITopic
+
+Existing SNS topic for alarm actions.
+
+When omitted, alarms have no SNS actions.
 
 ---
 
@@ -2682,9 +2331,12 @@ public readonly removalPolicy: RemovalPolicy;
 ```
 
 - *Type:* aws-cdk-lib.RemovalPolicy
-- *Default:* RemovalPolicy.DESTROY
+- *Default:* RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE
 
 Removal policy for the log group.
+
+A failed create deletes the log group. After a successful create, stack
+deletion and replacement keep the logs.
 
 ---
 
@@ -2839,27 +2491,42 @@ Cron day of week (e.g. MON-FRI).
 
 ---
 
-### Secrets <a name="Secrets" id="ec2-instance-running-scheduler.Secrets"></a>
+### SlackNotification <a name="SlackNotification" id="ec2-instance-running-scheduler.SlackNotification"></a>
 
-Secret identifiers required by the scheduler (e.g. Slack).
+Slack notification. The construct grants secret read and attaches the Parameters and Secrets extension.
 
-#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.Secrets.Initializer"></a>
+The secret JSON must contain non-empty `token` and `channel` strings.
+
+#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.SlackNotification.Initializer"></a>
 
 ```typescript
-import { Secrets } from 'ec2-instance-running-scheduler'
+import { SlackNotification } from 'ec2-instance-running-scheduler'
 
-const secrets: Secrets = { ... }
+const slackNotification: SlackNotification = { ... }
 ```
 
 #### Properties <a name="Properties" id="Properties"></a>
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#ec2-instance-running-scheduler.Secrets.property.slackSecretName">slackSecretName</a></code> | <code>string</code> | Name of the Secrets Manager secret containing Slack token and channel. |
+| <code><a href="#ec2-instance-running-scheduler.SlackNotification.property.channel">channel</a></code> | <code>string</code> | Selects Slack. |
+| <code><a href="#ec2-instance-running-scheduler.SlackNotification.property.slackSecretName">slackSecretName</a></code> | <code>string</code> | Name of the Secrets Manager secret containing Slack `token` and `channel`. |
 
 ---
 
-##### `slackSecretName`<sup>Required</sup> <a name="slackSecretName" id="ec2-instance-running-scheduler.Secrets.property.slackSecretName"></a>
+##### `channel`<sup>Required</sup> <a name="channel" id="ec2-instance-running-scheduler.SlackNotification.property.channel"></a>
+
+```typescript
+public readonly channel: string;
+```
+
+- *Type:* string
+
+Selects Slack.
+
+---
+
+##### `slackSecretName`<sup>Required</sup> <a name="slackSecretName" id="ec2-instance-running-scheduler.SlackNotification.property.slackSecretName"></a>
 
 ```typescript
 public readonly slackSecretName: string;
@@ -2867,7 +2534,56 @@ public readonly slackSecretName: string;
 
 - *Type:* string
 
-Name of the Secrets Manager secret containing Slack token and channel.
+Name of the Secrets Manager secret containing Slack `token` and `channel`.
+
+---
+
+### SnsNotification <a name="SnsNotification" id="ec2-instance-running-scheduler.SnsNotification"></a>
+
+Amazon SNS notification. The construct grants `sns:Publish` on {@link topic} and does not create the topic.
+
+Email subscriptions receive one plain-text message per run. HTML is not used.
+
+#### Initializer <a name="Initializer" id="ec2-instance-running-scheduler.SnsNotification.Initializer"></a>
+
+```typescript
+import { SnsNotification } from 'ec2-instance-running-scheduler'
+
+const snsNotification: SnsNotification = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#ec2-instance-running-scheduler.SnsNotification.property.channel">channel</a></code> | <code>string</code> | Selects Amazon SNS. |
+| <code><a href="#ec2-instance-running-scheduler.SnsNotification.property.topic">topic</a></code> | <code>aws-cdk-lib.aws_sns.ITopic</code> | Existing topic. |
+
+---
+
+##### `channel`<sup>Required</sup> <a name="channel" id="ec2-instance-running-scheduler.SnsNotification.property.channel"></a>
+
+```typescript
+public readonly channel: string;
+```
+
+- *Type:* string
+
+Selects Amazon SNS.
+
+---
+
+##### `topic`<sup>Required</sup> <a name="topic" id="ec2-instance-running-scheduler.SnsNotification.property.topic"></a>
+
+```typescript
+public readonly topic: ITopic;
+```
+
+- *Type:* aws-cdk-lib.aws_sns.ITopic
+
+Existing topic.
+
+Attach an email subscription on this topic to deliver mail.
 
 ---
 

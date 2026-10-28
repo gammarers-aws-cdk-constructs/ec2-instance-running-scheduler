@@ -1,6 +1,6 @@
 {
   "name": "ec2-instance-running-scheduler",
-  "description": "AWS CDK construct library that starts and stops EC2 instances on a cron schedule using EventBridge Scheduler and a Durable Execution Lambda. Tagged instances are discovered account-wide, started or stopped in parallel, waited until stable, and reported to Slack via Secrets Manager.",
+  "description": "AWS CDK construct library that starts and stops tagged EC2 instances on a cron schedule with EventBridge Scheduler and a Durable Execution Lambda, and optionally reports results to CloudWatch Logs, Slack, Amazon SNS, or an EventBridge custom bus.",
   "repository": {
     "type": "git",
     "url": "https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler.git"
@@ -40,10 +40,13 @@
   },
   "devDependencies": {
     "@aws-sdk/client-ec2": "^3.1111.0",
+    "@aws-sdk/client-eventbridge": "^3.1111.0",
     "@aws-sdk/client-resource-groups-tagging-api": "^3.1111.0",
+    "@aws-sdk/client-sns": "^3.1111.0",
     "@aws/durable-execution-sdk-js": "^1.1.7",
-    "@gammarers/projen-projects": "^0.4.0",
+    "@gammarers/projen-projects": "^0.6.2",
     "@slack/web-api": "^6.13.0",
+    "@smithy/node-http-handler": "^4.12.1",
     "@stylistic/eslint-plugin": "^2",
     "@types/aws-lambda": "^8.10.162",
     "@types/jest": "^29.5.14",
@@ -51,7 +54,7 @@
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
     "aws-cdk-lib": "2.232.0",
-    "aws-lambda-secret-fetcher": "^0.8.1",
+    "aws-lambda-secret-fetcher": "^0.9.1",
     "aws-sdk-client-mock": "^2.2.0",
     "aws-sdk-client-mock-jest": "^2.2.0",
     "commit-and-tag-version": "^13",
@@ -67,24 +70,28 @@
     "jsii-docgen": "^10.5.0",
     "jsii-pacmak": "^1.142.0",
     "jsii-rosetta": "6.0.x",
+    "lambda-failure-detector": "0.2.1",
     "projen": "^0.104.14",
-    "strict-env-resolver": "^0.7.2",
+    "strict-env-resolver": "^0.8.2",
     "ts-jest": "^29.4.15",
     "ts-node": "^10.9.2",
     "typescript": "6.0.x"
   },
   "peerDependencies": {
     "aws-cdk-lib": "^2.232.0",
-    "constructs": "^10.5.1"
+    "constructs": "^10.5.1",
+    "lambda-failure-detector": "^0.2.1"
   },
   "keywords": [
     "cdk",
     "durable",
     "ec2",
+    "eventbridge",
     "execution",
     "lambda",
     "scheduler",
-    "slack"
+    "slack",
+    "sns"
   ],
   "engines": {
     "node": ">= 20.0.0"
@@ -104,6 +111,14 @@
   "version": "0.0.0",
   "jest": {
     "coverageProvider": "v8",
+    "coverageThreshold": {
+      "global": {
+        "branches": 95,
+        "functions": 90,
+        "lines": 100,
+        "statements": 100
+      }
+    },
     "testMatch": [
       "<rootDir>/@(src|test)/**/*(*.)@(spec|test).ts?(x)",
       "<rootDir>/@(src|test)/**/__tests__/**/*.ts?(x)",

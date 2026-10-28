@@ -1,43 +1,37 @@
 import { ArnFormat, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
+import * as events from 'aws-cdk-lib/aws-events';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
+import { RunningSchedulerFunction } from './funcs/running-scheduler-function';
 import {
   createRunningSchedulerFailureDetection,
   type RunningSchedulerFailureDetection,
   type RunningSchedulerFailureDetectionProps,
 } from './running-scheduler-failure-detection';
-import { RunningSchedulerFunction } from '../funcs/running-scheduler-function';
 import {
   DEFAULT_MAX_CONCURRENCY,
-  DEFAULT_RESOURCE_WAIT_LIMITS,
-} from '../funcs/running-scheduler-predicates';
-import {
+  DEFAULT_MAX_ELAPSED_SECONDS,
+  DEFAULT_MAX_LOOP_COUNT,
+  DEFAULT_STATUS_CHANGE_WAIT_SECONDS,
+  NOTIFICATION_CHANNEL_ENV,
+  NOTIFICATION_CHANNEL_EVENT_BRIDGE,
+  NOTIFICATION_CHANNEL_LOGS,
+  NOTIFICATION_CHANNEL_SLACK,
+  NOTIFICATION_CHANNEL_SNS,
+  NOTIFICATION_EVENT_BUS_NAME_ENV,
+  NOTIFICATION_TOPIC_ARN_ENV,
   PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
   PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
   PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
   PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
-} from '../funcs/running-scheduler-wait-config';
-
-export type {
-  RunningSchedulerFailureDetection,
-  RunningSchedulerFailureDetectionProps,
-  RunningSchedulerFailureDetectionResourcesProps,
-} from './running-scheduler-failure-detection';
-export {
-  createLambdaFailureDetector,
-  isLambdaFailureDetectionEnabled,
-  LambdaFailureDetector,
-  type CreateLambdaFailureDetectorProps,
-  type LambdaFailureDetection,
-  type LambdaFailureDetectorProps,
-  type LogFailureAlarm,
-  type LogFailureFilter,
-} from './lambda-failure-detector/lambda-failure-detector';
+  SLACK_SECRET_NAME_ENV,
+} from './settings/consts';
 
 /**
  * Cron-style schedule configuration for start/stop actions.
@@ -68,33 +62,68 @@ export interface TargetResource {
 }
 
 /**
- * Secret identifiers required by the scheduler (e.g. Slack).
+ * Slack notification. The construct grants secret read and attaches the Parameters and Secrets extension.
+ *
+ * The secret JSON must contain non-empty `token` and `channel` strings.
  */
-export interface Secrets {
-  /** Name of the Secrets Manager secret containing Slack token and channel. */
+export interface SlackNotification {
+  /** Selects Slack. */
+  readonly channel: typeof NOTIFICATION_CHANNEL_SLACK;
+  /** Name of the Secrets Manager secret containing Slack `token` and `channel`. */
   readonly slackSecretName: string;
 }
 
 /**
+ * Amazon SNS notification. The construct grants `sns:Publish` on {@link topic} and does not create the topic.
+ *
+ * Email subscriptions receive one plain-text message per run. HTML is not used.
+ */
+export interface SnsNotification {
+  /** Selects Amazon SNS. */
+  readonly channel: typeof NOTIFICATION_CHANNEL_SNS;
+  /** Existing topic. Attach an email subscription on this topic to deliver mail. */
+  readonly topic: sns.ITopic;
+}
+
+/**
+ * EventBridge custom-bus notification. The construct grants `events:PutEvents` and does not create the bus or rules.
+ */
+export interface EventBridgeNotification {
+  /** Selects an EventBridge custom bus. */
+  readonly channel: typeof NOTIFICATION_CHANNEL_EVENT_BRIDGE;
+  /** Existing custom event bus. */
+  readonly eventBus: events.IEventBus;
+}
+
+/**
+ * Where a completed run is reported.
+ *
+ * Omit {@link EC2InstanceRunningSchedulerProps.notification} to log the same text and send nothing else.
+ * Only one channel is accepted.
+ */
+export type RunningSchedulerNotification = SlackNotification | SnsNotification | EventBridgeNotification;
+
+/**
  * CDK-side limits for per-instance stable-state waiting in the Durable Lambda handler.
  *
- * Optional fields map to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV} and
- * {@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV} on the running scheduler function.
+ * Optional fields map to {@link PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV},
+ * {@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV}, and
+ * {@link PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV} on the running scheduler function.
  * Prevents abnormal or stuck transitions from running until the Durable execution timeout.
  *
- * @see {@link ResourceWaitLimits} in `running-scheduler-predicates.ts` for the handler-side required shape.
+ * The handler reads the same numbers from its environment and applies them as required limits.
  */
 export interface ResourceWaitLimits {
   /**
    * Maximum describe/wait loop iterations per instance.
    *
-   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount} (90)
+   * @default {@link DEFAULT_MAX_LOOP_COUNT} (90)
    */
   readonly maxLoopCount?: number;
   /**
    * Maximum wall-clock seconds spent waiting for a single instance to stabilize.
    *
-   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds} (1800, 30 minutes)
+   * @default {@link DEFAULT_MAX_ELAPSED_SECONDS} (1800, 30 minutes)
    */
   readonly maxElapsedSeconds?: number;
   /**
@@ -102,7 +131,7 @@ export interface ResourceWaitLimits {
    *
    * Lower values detect state changes sooner; higher values reduce DescribeInstances calls.
    *
-   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds} (20)
+   * @default {@link DEFAULT_STATUS_CHANGE_WAIT_SECONDS} (20)
    */
   readonly statusChangeWaitSeconds?: number;
 }
@@ -170,7 +199,10 @@ export interface RunningSchedulerLogGroupProps {
   /**
    * Removal policy for the log group.
    *
-   * @default RemovalPolicy.DESTROY
+   * A failed create deletes the log group. After a successful create, stack
+   * deletion and replacement keep the logs.
+   *
+   * @default RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE
    */
   readonly removalPolicy?: RemovalPolicy;
 }
@@ -183,8 +215,12 @@ export interface EC2InstanceRunningSchedulerProps {
   readonly targetResource: TargetResource;
   /** Whether EventBridge Scheduler rules are enabled. Defaults to true if omitted. */
   readonly enableScheduling?: boolean;
-  /** Secrets (e.g. Slack) used for notifications. */
-  readonly secrets: Secrets;
+  /**
+   * Where to report a completed run.
+   *
+   * @default logs only (no Slack, SNS, or EventBridge permissions)
+   */
+  readonly notification?: RunningSchedulerNotification;
   /** Cron schedule for stopping instances. */
   readonly stopSchedule?: Schedule;
   /** Cron schedule for starting instances. */
@@ -192,7 +228,7 @@ export interface EC2InstanceRunningSchedulerProps {
   /**
    * Per-instance wait limits for the running scheduler Lambda.
    *
-   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS}
+   * @default {@link DEFAULT_MAX_LOOP_COUNT}, {@link DEFAULT_MAX_ELAPSED_SECONDS}, {@link DEFAULT_STATUS_CHANGE_WAIT_SECONDS}
    */
   readonly resourceWait?: ResourceWaitLimits;
   /**
@@ -210,7 +246,7 @@ export interface EC2InstanceRunningSchedulerProps {
   /**
    * CloudWatch Logs retention and removal policy for the function log group.
    *
-   * @default RetentionDays.THREE_MONTHS, RemovalPolicy.DESTROY
+   * @default RetentionDays.THREE_MONTHS, RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE
    */
   readonly logGroup?: RunningSchedulerLogGroupProps;
   /**
@@ -245,6 +281,52 @@ const resolvePositiveInteger = (name: string, value: number | undefined, default
     throw new Error(`${name} must be a positive integer (got ${String(value)})`);
   }
   return value;
+};
+
+/**
+ * Rejects a Slack channel whose secret name is blank.
+ *
+ * @param notification - Optional notification channel.
+ * @throws {Error} When `notification.slackSecretName` is empty or whitespace.
+ */
+const assertNotification = (notification: RunningSchedulerNotification | undefined): void => {
+  if (!notification || notification.channel !== NOTIFICATION_CHANNEL_SLACK) {
+    return;
+  }
+  if (notification.slackSecretName.trim() !== '') {
+    return;
+  }
+  throw new Error('notification.slackSecretName must be a non-empty string');
+};
+
+/**
+ * Environment variables that select the notification channel at runtime.
+ *
+ * @param notification - Optional notification channel.
+ * @returns Variables merged onto the running scheduler function.
+ */
+const notificationEnvironment = (
+  notification: RunningSchedulerNotification | undefined,
+): { [key: string]: string } => {
+  if (!notification) {
+    return { [NOTIFICATION_CHANNEL_ENV]: NOTIFICATION_CHANNEL_LOGS };
+  }
+  if (notification.channel === NOTIFICATION_CHANNEL_SLACK) {
+    return {
+      [NOTIFICATION_CHANNEL_ENV]: notification.channel,
+      [SLACK_SECRET_NAME_ENV]: notification.slackSecretName,
+    };
+  }
+  if (notification.channel === NOTIFICATION_CHANNEL_SNS) {
+    return {
+      [NOTIFICATION_CHANNEL_ENV]: notification.channel,
+      [NOTIFICATION_TOPIC_ARN_ENV]: notification.topic.topicArn,
+    };
+  }
+  return {
+    [NOTIFICATION_CHANNEL_ENV]: notification.channel,
+    [NOTIFICATION_EVENT_BUS_NAME_ENV]: notification.eventBus.eventBusName,
+  };
 };
 
 /**
@@ -305,7 +387,8 @@ const taggedInstanceStartStopStatement = (
  * Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
  *
  * Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
- * the Resource Groups Tagging API and EC2 APIs; Slack notifications use the secret named in {@link Secrets.slackSecretName}.
+ * the Resource Groups Tagging API and EC2 APIs. Notification uses {@link EC2InstanceRunningSchedulerProps.notification}
+ * (logs only when omitted).
  *
  * Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
  * and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
@@ -325,7 +408,7 @@ export class EC2InstanceRunningScheduler extends Construct {
    *
    * @param scope - Parent construct.
    * @param id - Construct id.
-   * @param props - Target tags, schedules, Slack secret, schedule enable flag, optional
+   * @param props - Target tags, schedules, optional notification channel, schedule enable flag, optional
    *   {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps},
    *   {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps},
    *   and optional {@link RunningSchedulerFailureDetectionProps}.
@@ -334,23 +417,26 @@ export class EC2InstanceRunningScheduler extends Construct {
     super(scope, id);
 
     assertTargetResourceForIam(props.targetResource);
+    assertNotification(props.notification);
 
-    const slackSecret = Secret.fromSecretNameV2(this, 'SlackSecret', props.secrets.slackSecretName);
+    const slackSecret = props.notification?.channel === NOTIFICATION_CHANNEL_SLACK
+      ? Secret.fromSecretNameV2(this, 'SlackSecret', props.notification.slackSecretName)
+      : undefined;
 
     const maxLoopCount = resolvePositiveInteger(
       'resourceWait.maxLoopCount',
       props.resourceWait?.maxLoopCount,
-      DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount,
+      DEFAULT_MAX_LOOP_COUNT,
     );
     const maxElapsedSeconds = resolvePositiveInteger(
       'resourceWait.maxElapsedSeconds',
       props.resourceWait?.maxElapsedSeconds,
-      DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds,
+      DEFAULT_MAX_ELAPSED_SECONDS,
     );
     const statusChangeWaitSeconds = resolvePositiveInteger(
       'resourceWait.statusChangeWaitSeconds',
       props.resourceWait?.statusChangeWaitSeconds,
-      DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds,
+      DEFAULT_STATUS_CHANGE_WAIT_SECONDS,
     );
     const maxConcurrency = resolvePositiveInteger(
       'runtime.maxConcurrency',
@@ -367,7 +453,7 @@ export class EC2InstanceRunningScheduler extends Construct {
     // Durable Execution requires Node.js 22+.
     const runningScheduleFunctionLogGroup = new logs.LogGroup(this, 'RunningSchedulerFunctionLogGroup', {
       retention: props.logGroup?.retention ?? logs.RetentionDays.THREE_MONTHS,
-      removalPolicy: props.logGroup?.removalPolicy ?? RemovalPolicy.DESTROY,
+      removalPolicy: props.logGroup?.removalPolicy ?? RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
 
     const runningScheduleFunction = new RunningSchedulerFunction(this, 'RunningSchedulerFunction', {
@@ -381,19 +467,23 @@ export class EC2InstanceRunningScheduler extends Construct {
         retentionPeriod: props.durable?.retentionPeriod ?? DEFAULT_DURABLE_RETENTION_PERIOD,
       },
       environment: {
-        SLACK_SECRET_NAME: props.secrets.slackSecretName,
+        ...notificationEnvironment(props.notification),
         [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: String(maxLoopCount),
         [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: String(maxElapsedSeconds),
         [PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV]: String(statusChangeWaitSeconds),
         [PROCESS_RESOURCES_MAX_CONCURRENCY_ENV]: String(maxConcurrency),
       },
-      paramsAndSecrets: lambda.ParamsAndSecretsLayerVersion.fromVersion(lambda.ParamsAndSecretsVersions.V1_0_103, {
-        // Required by aws-lambda-secret-fetcher (extension HTTP API on localhost; port from PARAMETERS_SECRETS_EXTENSION_HTTP_PORT).
-        cacheSize: 500,
-        logLevel: lambda.ParamsAndSecretsLogLevel.INFO,
-      }),
+      ...(slackSecret
+        ? {
+          paramsAndSecrets: lambda.ParamsAndSecretsLayerVersion.fromVersion(lambda.ParamsAndSecretsVersions.V1_0_103, {
+            // Required by aws-lambda-secret-fetcher (extension HTTP API on localhost; port from PARAMETERS_SECRETS_EXTENSION_HTTP_PORT).
+            cacheSize: 500,
+            logLevel: lambda.ParamsAndSecretsLogLevel.INFO,
+          }),
+        }
+        : {}),
       role: new iam.Role(this, 'RunningSchedulerFunctionRole', {
-        description: 'Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.',
+        description: 'Allows the running scheduler to describe instances, start/stop tagged EC2 instances, and send the configured notification.',
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
@@ -426,8 +516,15 @@ export class EC2InstanceRunningScheduler extends Construct {
     runningScheduleFunction.addToRolePolicy(
       taggedInstanceStartStopStatement(this, props.targetResource),
     );
-    // Grant read access to the Slack secret
-    slackSecret.grantRead(runningScheduleFunction);
+    if (slackSecret) {
+      slackSecret.grantRead(runningScheduleFunction);
+    }
+    if (props.notification?.channel === NOTIFICATION_CHANNEL_SNS) {
+      props.notification.topic.grantPublish(runningScheduleFunction);
+    }
+    if (props.notification?.channel === NOTIFICATION_CHANNEL_EVENT_BRIDGE) {
+      props.notification.eventBus.grantPutEventsTo(runningScheduleFunction);
+    }
 
     this.failureDetection = createRunningSchedulerFailureDetection(this, 'FailureDetection', {
       failureDetection: props.failureDetection,
@@ -438,14 +535,8 @@ export class EC2InstanceRunningScheduler extends Construct {
     // See: https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started-iac.html
     const runningScheduleFunctionAlias = runningScheduleFunction.addAlias('live');
 
-    // Whether schedules are enabled (default true unless explicitly disabled).
-    const scheduleEnabled: boolean = (() => {
-      if (props.enableScheduling === undefined || props.enableScheduling) {
-        return true;
-      } else {
-        return false;
-      }
-    })();
+    // Schedules stay enabled unless the caller sets enableScheduling to false.
+    const scheduleEnabled = props.enableScheduling !== false;
 
     // Durable Functions: Lambda performs tag lookup and instance start/stop in a single run.
     new scheduler.Schedule(this, 'RunningStartSchedule', {

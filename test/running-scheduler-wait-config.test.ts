@@ -1,11 +1,12 @@
-import { DEFAULT_MAX_CONCURRENCY, DEFAULT_RESOURCE_WAIT_LIMITS } from '../src/funcs/running-scheduler-predicates';
+import { DEFAULT_RESOURCE_WAIT_LIMITS } from '../src/funcs/core/running-scheduler-predicates';
+import { parseMaxConcurrencyFromEnv, parseResourceWaitLimitsFromEnv } from '../src/funcs/running-scheduler-wait-env';
 import {
+  DEFAULT_MAX_CONCURRENCY,
   PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
   PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
   PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
   PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
-} from '../src/funcs/running-scheduler-wait-config';
-import { parseMaxConcurrencyFromEnv, parseResourceWaitLimitsFromEnv } from '../src/funcs/running-scheduler-wait-env';
+} from '../src/settings/consts';
 
 const savedEnv = { ...process.env };
 
@@ -28,9 +29,9 @@ const withEnv = (overrides: Record<string, string | undefined>, fn: () => void):
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined) {
       delete process.env[key];
-    } else {
-      process.env[key] = value;
+      continue;
     }
+    process.env[key] = value;
   }
   try {
     fn();

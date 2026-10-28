@@ -2,73 +2,6 @@
 
 exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default schedule) Should match snapshot: default 1`] = `
 {
-  "Mappings": {
-    "ParamsandsecretslayerMap": {
-      "af-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:af-south-1:317013901791:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-east-1:768336418462:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-northeast-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-1:133490724326:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-northeast-2": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-2:738900069198:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-south-1:176022468876:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-1:044395824272:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-2": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-2:665172237481:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-3": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-3:490737872127:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ca-central-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ca-central-1:200266452380:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-central-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-central-1:187925254637:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-north-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-north-1:427196147048:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-south-1:325218067255:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-west-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-1:015030872274:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-west-2": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-2:133256977650:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-west-3": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-3:780235371811:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "me-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:me-south-1:832021897121:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "sa-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:sa-east-1:933737806257:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "us-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:us-east-1:177933569100:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "us-east-2": {
-        "1x0x103xarm64": "arn:aws:lambda:us-east-2:590474943231:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "us-west-1": {
-        "1x0x103xarm64": "arn:aws:lambda:us-west-1:997803712105:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "us-west-2": {
-        "1x0x103xarm64": "arn:aws:lambda:us-west-2:345057560386:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-    },
-  },
   "Parameters": {
     "BootstrapVersion": {
       "Default": "/cdk-bootstrap/hnb659fds/version",
@@ -90,7 +23,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "1edf105738311e103d810212e473d4972b81d4f5040536210b68ccfb633f12dc.zip",
+          "S3Key": "7ecf95f04bad4b9bc850b8fe7dc1afddcd850afdcfc9a0eeedec8e541c446650.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -100,34 +33,14 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         "Environment": {
           "Variables": {
             "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1",
-            "PARAMETERS_SECRETS_EXTENSION_CACHE_ENABLED": "true",
-            "PARAMETERS_SECRETS_EXTENSION_CACHE_SIZE": "500",
-            "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
-            "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
-            "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "NOTIFICATION_CHANNEL": "logs",
             "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
             "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
-            "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
-            "SECRETS_MANAGER_TTL": "300",
-            "SLACK_SECRET_NAME": "test/slack-webhook",
-            "SSM_PARAMETER_STORE_TIMEOUT_MILLIS": "0",
-            "SSM_PARAMETER_STORE_TTL": "300",
           },
         },
         "Handler": "index.handler",
-        "Layers": [
-          {
-            "Fn::FindInMap": [
-              "ParamsandsecretslayerMap",
-              {
-                "Ref": "AWS::Region",
-              },
-              "1x0x103xarm64",
-            ],
-          },
-        ],
         "LoggingConfig": {
           "ApplicationLogLevel": "INFO",
           "LogFormat": "JSON",
@@ -155,7 +68,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601644d144784aeed976104b59d959d2bfb",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660149b0ef192344ff965a670032110f1931",
             "Version",
           ],
         },
@@ -163,7 +76,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601644d144784aeed976104b59d959d2bfb": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660149b0ef192344ff965a670032110f1931": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -185,12 +98,12 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
       "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
-      "DeletionPolicy": "Delete",
+      "DeletionPolicy": "RetainExceptOnCreate",
       "Properties": {
         "RetentionInDays": 90,
       },
       "Type": "AWS::Logs::LogGroup",
-      "UpdateReplacePolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
       "Properties": {
@@ -206,7 +119,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances, start/stop tagged EC2 instances, and send the configured notification.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -286,33 +199,6 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
                 ],
               },
               "Sid": "Ec2StartStopTaggedInstances",
-            },
-            {
-              "Action": [
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:DescribeSecret",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    "arn:",
-                    {
-                      "Ref": "AWS::Partition",
-                    },
-                    ":secretsmanager:",
-                    {
-                      "Ref": "AWS::Region",
-                    },
-                    ":",
-                    {
-                      "Ref": "AWS::AccountId",
-                    },
-                    ":secret:test/slack-webhook-??????",
-                  ],
-                ],
-              },
             },
           ],
           "Version": "2012-10-17",
@@ -482,73 +368,6 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
 
 exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Should match snapshot: disable 1`] = `
 {
-  "Mappings": {
-    "ParamsandsecretslayerMap": {
-      "af-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:af-south-1:317013901791:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-east-1:768336418462:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-northeast-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-1:133490724326:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-northeast-2": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-2:738900069198:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-south-1:176022468876:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-1:044395824272:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-2": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-2:665172237481:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-3": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-3:490737872127:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ca-central-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ca-central-1:200266452380:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-central-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-central-1:187925254637:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-north-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-north-1:427196147048:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-south-1:325218067255:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-west-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-1:015030872274:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-west-2": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-2:133256977650:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-west-3": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-3:780235371811:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "me-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:me-south-1:832021897121:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "sa-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:sa-east-1:933737806257:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "us-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:us-east-1:177933569100:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "us-east-2": {
-        "1x0x103xarm64": "arn:aws:lambda:us-east-2:590474943231:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "us-west-1": {
-        "1x0x103xarm64": "arn:aws:lambda:us-west-1:997803712105:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "us-west-2": {
-        "1x0x103xarm64": "arn:aws:lambda:us-west-2:345057560386:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-    },
-  },
   "Parameters": {
     "BootstrapVersion": {
       "Default": "/cdk-bootstrap/hnb659fds/version",
@@ -570,7 +389,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "1edf105738311e103d810212e473d4972b81d4f5040536210b68ccfb633f12dc.zip",
+          "S3Key": "7ecf95f04bad4b9bc850b8fe7dc1afddcd850afdcfc9a0eeedec8e541c446650.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -580,34 +399,14 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         "Environment": {
           "Variables": {
             "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1",
-            "PARAMETERS_SECRETS_EXTENSION_CACHE_ENABLED": "true",
-            "PARAMETERS_SECRETS_EXTENSION_CACHE_SIZE": "500",
-            "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
-            "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
-            "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "NOTIFICATION_CHANNEL": "logs",
             "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
             "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
-            "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
-            "SECRETS_MANAGER_TTL": "300",
-            "SLACK_SECRET_NAME": "test/slack-webhook",
-            "SSM_PARAMETER_STORE_TIMEOUT_MILLIS": "0",
-            "SSM_PARAMETER_STORE_TTL": "300",
           },
         },
         "Handler": "index.handler",
-        "Layers": [
-          {
-            "Fn::FindInMap": [
-              "ParamsandsecretslayerMap",
-              {
-                "Ref": "AWS::Region",
-              },
-              "1x0x103xarm64",
-            ],
-          },
-        ],
         "LoggingConfig": {
           "ApplicationLogLevel": "INFO",
           "LogFormat": "JSON",
@@ -635,7 +434,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601644d144784aeed976104b59d959d2bfb",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660149b0ef192344ff965a670032110f1931",
             "Version",
           ],
         },
@@ -643,7 +442,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601644d144784aeed976104b59d959d2bfb": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660149b0ef192344ff965a670032110f1931": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -665,12 +464,12 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
       "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
-      "DeletionPolicy": "Delete",
+      "DeletionPolicy": "RetainExceptOnCreate",
       "Properties": {
         "RetentionInDays": 90,
       },
       "Type": "AWS::Logs::LogGroup",
-      "UpdateReplacePolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
       "Properties": {
@@ -686,7 +485,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances, start/stop tagged EC2 instances, and send the configured notification.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -766,33 +565,6 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
                 ],
               },
               "Sid": "Ec2StartStopTaggedInstances",
-            },
-            {
-              "Action": [
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:DescribeSecret",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    "arn:",
-                    {
-                      "Ref": "AWS::Partition",
-                    },
-                    ":secretsmanager:",
-                    {
-                      "Ref": "AWS::Region",
-                    },
-                    ":",
-                    {
-                      "Ref": "AWS::AccountId",
-                    },
-                    ":secret:test/slack-webhook-??????",
-                  ],
-                ],
-              },
             },
           ],
           "Version": "2012-10-17",
@@ -962,73 +734,6 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
 
 exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone) Should match snapshot: specific 1`] = `
 {
-  "Mappings": {
-    "ParamsandsecretslayerMap": {
-      "af-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:af-south-1:317013901791:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-east-1:768336418462:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-northeast-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-1:133490724326:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-northeast-2": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-northeast-2:738900069198:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ap-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-south-1:176022468876:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-1:044395824272:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-2": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-2:665172237481:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "ap-southeast-3": {
-        "1x0x103xarm64": "arn:aws:lambda:ap-southeast-3:490737872127:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "ca-central-1": {
-        "1x0x103xarm64": "arn:aws:lambda:ca-central-1:200266452380:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-central-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-central-1:187925254637:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-north-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-north-1:427196147048:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-south-1:325218067255:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "eu-west-1": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-1:015030872274:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-west-2": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-2:133256977650:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "eu-west-3": {
-        "1x0x103xarm64": "arn:aws:lambda:eu-west-3:780235371811:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "me-south-1": {
-        "1x0x103xarm64": "arn:aws:lambda:me-south-1:832021897121:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "sa-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:sa-east-1:933737806257:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "us-east-1": {
-        "1x0x103xarm64": "arn:aws:lambda:us-east-1:177933569100:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "us-east-2": {
-        "1x0x103xarm64": "arn:aws:lambda:us-east-2:590474943231:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-      "us-west-1": {
-        "1x0x103xarm64": "arn:aws:lambda:us-west-1:997803712105:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:1",
-      },
-      "us-west-2": {
-        "1x0x103xarm64": "arn:aws:lambda:us-west-2:345057560386:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:4",
-      },
-    },
-  },
   "Parameters": {
     "BootstrapVersion": {
       "Default": "/cdk-bootstrap/hnb659fds/version",
@@ -1050,7 +755,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "1edf105738311e103d810212e473d4972b81d4f5040536210b68ccfb633f12dc.zip",
+          "S3Key": "7ecf95f04bad4b9bc850b8fe7dc1afddcd850afdcfc9a0eeedec8e541c446650.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -1060,34 +765,14 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         "Environment": {
           "Variables": {
             "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1",
-            "PARAMETERS_SECRETS_EXTENSION_CACHE_ENABLED": "true",
-            "PARAMETERS_SECRETS_EXTENSION_CACHE_SIZE": "500",
-            "PARAMETERS_SECRETS_EXTENSION_HTTP_PORT": "2773",
-            "PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL": "info",
-            "PARAMETERS_SECRETS_EXTENSION_MAX_CONNECTIONS": "3",
+            "NOTIFICATION_CHANNEL": "logs",
             "PROCESS_RESOURCES_MAX_CONCURRENCY": "10",
             "PROCESS_RESOURCE_MAX_ELAPSED_SECONDS": "1800",
             "PROCESS_RESOURCE_MAX_LOOP_COUNT": "90",
             "PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS": "20",
-            "SECRETS_MANAGER_TIMEOUT_MILLIS": "0",
-            "SECRETS_MANAGER_TTL": "300",
-            "SLACK_SECRET_NAME": "test/slack-webhook",
-            "SSM_PARAMETER_STORE_TIMEOUT_MILLIS": "0",
-            "SSM_PARAMETER_STORE_TTL": "300",
           },
         },
         "Handler": "index.handler",
-        "Layers": [
-          {
-            "Fn::FindInMap": [
-              "ParamsandsecretslayerMap",
-              {
-                "Ref": "AWS::Region",
-              },
-              "1x0x103xarm64",
-            ],
-          },
-        ],
         "LoggingConfig": {
           "ApplicationLogLevel": "INFO",
           "LogFormat": "JSON",
@@ -1115,7 +800,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601644d144784aeed976104b59d959d2bfb",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660149b0ef192344ff965a670032110f1931",
             "Version",
           ],
         },
@@ -1123,7 +808,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601644d144784aeed976104b59d959d2bfb": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660149b0ef192344ff965a670032110f1931": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -1145,12 +830,12 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
       "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
-      "DeletionPolicy": "Delete",
+      "DeletionPolicy": "RetainExceptOnCreate",
       "Properties": {
         "RetentionInDays": 90,
       },
       "Type": "AWS::Logs::LogGroup",
-      "UpdateReplacePolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
       "Properties": {
@@ -1166,7 +851,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           ],
           "Version": "2012-10-17",
         },
-        "Description": "Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.",
+        "Description": "Allows the running scheduler to describe instances, start/stop tagged EC2 instances, and send the configured notification.",
         "ManagedPolicyArns": [
           {
             "Fn::Join": [
@@ -1246,33 +931,6 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
                 ],
               },
               "Sid": "Ec2StartStopTaggedInstances",
-            },
-            {
-              "Action": [
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:DescribeSecret",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    "arn:",
-                    {
-                      "Ref": "AWS::Partition",
-                    },
-                    ":secretsmanager:",
-                    {
-                      "Ref": "AWS::Region",
-                    },
-                    ":",
-                    {
-                      "Ref": "AWS::AccountId",
-                    },
-                    ":secret:test/slack-webhook-??????",
-                  ],
-                ],
-              },
             },
           ],
           "Version": "2012-10-17",

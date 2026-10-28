@@ -7,7 +7,7 @@
 
 [![View on Construct Hub](https://constructs.dev/badge?package=ec2-instance-running-scheduler)](https://constructs.dev/packages/ec2-instance-running-scheduler)
 
-AWS CDK construct library that starts and stops EC2 instances on a cron schedule using EventBridge Scheduler and a Durable Execution Lambda. Tagged instances are discovered account-wide, started or stopped in parallel, waited until stable, and reported to Slack via Secrets Manager.
+AWS CDK construct library that starts and stops tagged EC2 instances on a cron schedule with EventBridge Scheduler and a Durable Execution Lambda, and optionally reports results to CloudWatch Logs, Slack, Amazon SNS, or an EventBridge custom bus.
 
 ## Features
 
@@ -16,8 +16,8 @@ AWS CDK construct library that starts and stops EC2 instances on a cron schedule
 - **Durable Lambda** – One Lambda with AWS Lambda Durable Execution (`step`, `wait`, `map`, child contexts per instance) for long-running workflows without Step Functions.
 - **Stable-state waiting** – After start/stop, waits and re-describes until `running` or `stopped`, with configurable wait limits (`resourceWait`).
 - **Configurable Lambda runtime** – Memory, invoke timeout, and bounded concurrency via `runtime`; Durable timeout and retention via `durable`.
-- **Slack notifications** – Parent message plus threaded updates per instance; credentials from Secrets Manager JSON (`token`, `channel`).
-- **Optional failure detection** – Opt-in CloudWatch alarms via `failureDetection` (`enabled` / optional `alarmTopic`). Uses `LambdaFailureDetector` for platform Lambda `Errors` plus scheduler-specific log filters (`ResourceWaitFailed`, Slack post failures, other handler `ERROR` logs). The construct never creates an SNS topic.
+- **Optional notification** – Omit `notification` to log only. Otherwise choose one channel: Slack (parent message and thread replies), Amazon SNS (one plain-text message, including email subscriptions), or an EventBridge custom bus (one JSON event). A send failure is logged and does not fail the instance run.
+- **Optional failure detection** – Opt-in CloudWatch alarms via `failureDetection` (`enabled` / optional `alarmTopic`). Uses [`lambda-failure-detector`](https://www.npmjs.com/package/lambda-failure-detector) for platform Lambda `Errors` and `Throttles`, plus scheduler-specific log filters (`ResourceWaitFailed`, notification send failures, other handler `ERROR` logs). The construct never creates an SNS topic for alarms.
 - **Scheduling toggle** – Enable or disable both schedules without removing the stack (`enableScheduling`).
 
 ## How it works
@@ -25,9 +25,15 @@ AWS CDK construct library that starts and stops EC2 instances on a cron schedule
 1. Tag EC2 instances in the same account and region with the `targetResource` tag key and one of the tag values **before** enabling schedules.
 2. EventBridge Scheduler invokes the Lambda alias on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`).
 3. The Durable handler discovers matching instances via the Resource Groups Tagging API, then starts or stops them in parallel (bounded by `runtime.maxConcurrency`).
-4. For each instance it waits (`resourceWait`) until the desired stable state, or fails with a `ResourceWaitFailed:*` error.
-5. Slack receives a summary and per-instance thread updates when the secret is configured.
-6. When `failureDetection.enabled` is `true`, CloudWatch alarms cover Lambda platform errors and the scheduler log filters above. Pass `failureDetection.alarmTopic` to attach SNS actions to an existing topic.
+4. For each instance it waits (`resourceWait`) until the desired stable state, or fails with a `ResourceWaitFailed:*` error. Defaults are 90 loops, 1800 seconds, and 20 seconds between describes. Lambda invoke `timeout` defaults to 15 minutes. Durable `executionTimeout` defaults to 2 hours and `retentionPeriod` to 1 day.
+5. When no instance matches, the run returns `TargetResourcesNotFound` and sends nothing.
+6. When instances were processed, the selected channel reports the result:
+   - **Omitted `notification`** – the same plain text is written to the function log. No Slack, SNS, or EventBridge permission is added.
+   - **Slack** – a parent message, then one thread reply per instance. The secret is read with the Parameters and Secrets Lambda Extension.
+   - **SNS** – one plain-text publish after every instance finishes. Email subscriptions show that text; HTML is not used.
+   - **EventBridge** – one `PutEvents` call to the bus you pass. This construct does not create the bus or a rule.
+7. A Slack, SNS, or EventBridge send failure is logged as `running-scheduler: notification post failed` and the run still completes. A Slack secret that is not JSON with `token` and `channel` throws.
+8. When `failureDetection.enabled` is `true`, CloudWatch alarms cover Lambda `Errors`, Lambda `Throttles`, and the scheduler log filters above. Pass `failureDetection.alarmTopic` to attach SNS actions to an existing topic. That topic is separate from `notification`.
 
 **Tag an instance (AWS CLI)**
 
@@ -61,27 +67,76 @@ pnpm add ec2-instance-running-scheduler
 
 ## Usage
 
-Use the **construct** `EC2InstanceRunningScheduler` when embedding the scheduler in an existing stack or other CDK scope.
+### Minimal deployable app
+
+Use `EC2InstanceRunningScheduleStack` when you want a dedicated stack you can deploy as-is. With `notification` omitted, results are written to the function log only.
+
+```typescript
+import { App, TimeZone } from 'aws-cdk-lib';
+import { EC2InstanceRunningScheduleStack } from 'ec2-instance-running-scheduler';
+
+const app = new App();
+
+new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
+  targetResource: {
+    tagKey: 'Schedule',
+    tagValues: ['YES'],
+  },
+  startSchedule: {
+    timezone: TimeZone.ASIA_TOKYO,
+    minute: '55',
+    hour: '8',
+    week: 'MON-FRI',
+  },
+  stopSchedule: {
+    timezone: TimeZone.ASIA_TOKYO,
+    minute: '5',
+    hour: '19',
+    week: 'MON-FRI',
+  },
+});
+
+app.synth();
+```
+
+Deploy checklist:
+
+1. Install this package and peers (`aws-cdk-lib`, `constructs`, `lambda-failure-detector`) in your CDK app.
+2. Tag each target instance with `Schedule=YES` in the same account and region before the schedules run.
+3. From the CDK app: `npx cdk deploy EC2InstanceRunningScheduleStack`
+
+### Embed in an existing stack
+
+Use `EC2InstanceRunningScheduler` when the scheduler shares a stack with other resources. Put the SNS topic in that stack and subscribe the email protocol yourself. The construct grants `sns:Publish` on that topic and does not create the subscription. The message is plain text: the subject is `😆 Starts the scheduled EC2 Instance.` or `🥱 Stops the scheduled EC2 Instance.`, and the body is one block per instance (emoji, account, region, identifier, status).
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { TimeZone } from 'aws-cdk-lib';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { EC2InstanceRunningScheduler } from 'ec2-instance-running-scheduler';
 
 const app = new cdk.App();
-const stack = new cdk.Stack(app, 'MyStack');
+const stack = new cdk.Stack(app, 'MyStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
+});
 
-const alarmTopic = new sns.Topic(stack, 'OpsAlerts');
+const mailTopic = new sns.Topic(stack, 'SchedulerMail');
 
 new EC2InstanceRunningScheduler(stack, 'EC2InstanceRunningScheduler', {
   targetResource: {
     tagKey: 'Schedule',
     tagValues: ['YES'],
   },
-  secrets: {
-    slackSecretName: 'my-slack-secret',
+  notification: {
+    channel: 'sns',
+    topic: mailTopic,
   },
   startSchedule: {
     timezone: TimeZone.ASIA_TOKYO,
@@ -95,75 +150,21 @@ new EC2InstanceRunningScheduler(stack, 'EC2InstanceRunningScheduler', {
     hour: '19',
     week: 'MON-FRI',
   },
-  enableScheduling: true,
-  resourceWait: {
-    maxLoopCount: 120,
-    maxElapsedSeconds: 3600,
-    statusChangeWaitSeconds: 15,
-  },
-  runtime: {
-    memorySize: 1024,
-    timeout: cdk.Duration.minutes(15),
-    maxConcurrency: 20,
-  },
-  durable: {
-    executionTimeout: cdk.Duration.hours(4),
-    retentionPeriod: cdk.Duration.days(7),
-  },
-  logGroup: {
-    retention: logs.RetentionDays.ONE_YEAR,
-    removalPolicy: cdk.RemovalPolicy.RETAIN,
-  },
-  failureDetection: {
-    enabled: true,
-    alarmTopic,
-  },
 });
+
+app.synth();
 ```
 
-Use the **stack** `EC2InstanceRunningScheduleStack` when deploying the scheduler as its own stack. It accepts the same targeting, schedules, secrets, enable flag, and failure detection as the construct (plus standard `StackProps`). For `resourceWait`, `runtime`, `durable`, and `logGroup`, use the construct directly.
+Slack uses a secret you create before deploy. The construct grants read on that secret and attaches the Parameters and Secrets Lambda Extension. You do not add that permission yourself. The secret JSON is `{ "token": "<bot token>", "channel": "<channel id>" }`.
 
 ```typescript
-import * as cdk from 'aws-cdk-lib';
-import { TimeZone } from 'aws-cdk-lib';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import { EC2InstanceRunningScheduleStack } from 'ec2-instance-running-scheduler';
-
-const app = new cdk.App();
-
-const alarmTopic = sns.Topic.fromTopicArn(
-  app,
-  'OpsAlerts',
-  'arn:aws:sns:ap-northeast-1:123456789012:ops-alerts',
-);
-
-new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', {
-  targetResource: {
-    tagKey: 'Schedule',
-    tagValues: ['YES'],
-  },
-  secrets: {
-    slackSecretName: 'my-slack-secret',
-  },
-  startSchedule: {
-    timezone: TimeZone.ASIA_TOKYO,
-    minute: '55',
-    hour: '8',
-    week: 'MON-FRI',
-  },
-  stopSchedule: {
-    timezone: TimeZone.ASIA_TOKYO,
-    minute: '5',
-    hour: '19',
-    week: 'MON-FRI',
-  },
-  enableScheduling: true,
-  failureDetection: {
-    enabled: true,
-    alarmTopic,
-  },
-});
+notification: {
+  channel: 'slack',
+  slackSecretName: 'my-slack-secret',
+},
 ```
+
+An EventBridge custom bus works the same way: pass `channel: 'eventBridge'` and an `events.IEventBus`. The construct grants `events:PutEvents` on that bus and does not create the bus or a rule. The event source is `ec2-instance-running-scheduler` and the detail type is `EC2InstanceRunningScheduler.Completed`. The detail JSON includes `mode`, `subject`, `message`, and `instances`.
 
 ## Options
 
@@ -172,7 +173,7 @@ new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', {
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
 | `targetResource` | `TargetResource` | Yes | Tag key and values used to select EC2 instances. |
-| `secrets` | `Secrets` | Yes | Secrets Manager secret for Slack (`slackSecretName`). |
+| `notification` | `RunningSchedulerNotification` | No | One channel: Slack, SNS, or EventBridge. Omit to log only. |
 | `startSchedule` | `Schedule` | No | Cron for starting instances (default: `50 7 ? * MON-FRI *` in `Etc/UTC`). |
 | `stopSchedule` | `Schedule` | No | Cron for stopping instances (default: `5 19 ? * MON-FRI *` in `Etc/UTC`). |
 | `enableScheduling` | `boolean` | No | Whether both scheduler rules are enabled (default: `true`). |
@@ -184,7 +185,7 @@ new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', {
 
 ### EC2InstanceRunningScheduleStack
 
-Includes `targetResource`, `secrets`, `startSchedule`, `stopSchedule`, `enableScheduling`, `failureDetection`, and standard `StackProps`. Does **not** expose `resourceWait`, `runtime`, `durable`, or `logGroup`; use `EC2InstanceRunningScheduler` when you need custom wait, Lambda, Durable, or log settings.
+Accepts every `EC2InstanceRunningScheduler` prop (`targetResource`, `notification`, `startSchedule`, `stopSchedule`, `enableScheduling`, `resourceWait`, `runtime`, `durable`, `logGroup`, `failureDetection`) plus standard `StackProps`. The stack forwards those scheduler fields to `EC2InstanceRunningScheduler`.
 
 ### TargetResource
 
@@ -198,9 +199,13 @@ Includes `targetResource`, `secrets`, `startSchedule`, `stopSchedule`, `enableSc
 - `hour` – Cron hour (`0`–`23`).
 - `week` – Cron day-of-week field (e.g. `MON-FRI`).
 
-### Secrets
+### RunningSchedulerNotification
 
-- `slackSecretName` – Name of the AWS Secrets Manager secret. The Lambda expects JSON with **`token`** (Slack bot token) and **`channel`** (channel ID or name for `chat.postMessage`).
+Pass one channel. Omit the prop to log only.
+
+- `{ channel: 'slack', slackSecretName }` – Secrets Manager secret name. The Lambda expects JSON with **`token`** (Slack bot token) and **`channel`** (channel id for `chat.postMessage`). A blank name fails synthesis.
+- `{ channel: 'sns', topic }` – Existing `sns.ITopic`. Email subscriptions receive one plain-text message per run.
+- `{ channel: 'eventBridge', eventBus }` – Existing `events.IEventBus`. One `PutEvents` call per run.
 
 ### ResourceWaitLimits
 
@@ -228,13 +233,13 @@ Lambda invoke settings. Written `maxConcurrency` to `PROCESS_RESOURCES_MAX_CONCU
 ### RunningSchedulerLogGroupProps
 
 - `retention` – CloudWatch Logs retention (default: **`RetentionDays.THREE_MONTHS`**).
-- `removalPolicy` – Log group removal policy (default: **`RemovalPolicy.DESTROY`**).
+- `removalPolicy` – Log group removal policy (default: **`RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE`**). A failed create deletes the log group. After a successful create, stack deletion and replacement keep the logs (`DeletionPolicy: RetainExceptOnCreate`, `UpdateReplacePolicy: Retain`).
 
 ### RunningSchedulerFailureDetectionProps
 
-Extends `LambdaFailureDetection` (`enabled` / `alarmTopic`). Alarms are created only when `enabled` is `true`. Internally uses `LambdaFailureDetector` with scheduler-specific log filters. The construct does **not** create an SNS topic.
+Extends `LambdaFailureDetection` from `lambda-failure-detector` (`enabled` / `alarmTopic`). Alarms are created only when `enabled` is `true`. The scheduler adds its own log filters on top of that package's platform alarms. The construct does **not** create an SNS topic.
 
-- `enabled` – When `true`, creates four CloudWatch alarms and three log metric filters (default: disabled when omitted).
+- `enabled` – When `true`, creates five CloudWatch alarms and three log metric filters (default: disabled when omitted).
 - `alarmTopic` – Optional `sns.ITopic` for alarm actions. When omitted, alarms are created without SNS actions.
 
 When enabled:
@@ -242,8 +247,9 @@ When enabled:
 | Alarm | Trigger |
 |-------|---------|
 | Lambda errors | `AWS/Lambda` `Errors` metric (platform) |
+| Lambda throttles | `AWS/Lambda` `Throttles` metric (platform) |
 | Instance status failure | Log filter: `ResourceWaitFailed` |
-| Slack post failure | Log filter: `running-scheduler: Slack post failed` |
+| Notification post failure | Log filter: `running-scheduler: notification post failed` |
 | Durable execution failure | Other handler `ERROR` logs (excluding the above) |
 
 Custom metrics use the `EC2InstanceRunningScheduler` namespace. Access created alarms via `EC2InstanceRunningScheduler.failureDetection` when enabled.
@@ -255,8 +261,22 @@ See [API.md](./API.md).
 ## Requirements
 
 - **Node.js** ≥ 20.0.0 (for developing or synthesizing CDK apps that depend on this package).
-- **aws-cdk-lib** ^2.232.0 and **constructs** ^10.5.1 (peer dependencies).
-- **AWS** – EventBridge Scheduler; Lambda with Durable Execution (Node.js **24.x** runtime in the construct); Parameters and Secrets Lambda Extension; EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`); Secrets Manager.
+- **aws-cdk-lib** ^2.232.0, **constructs** ^10.5.1, and **lambda-failure-detector** ^0.2.1 (peer dependencies).
+- **AWS** – EventBridge Scheduler; Lambda with Durable Execution (Node.js **24.x** runtime in the construct); EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`). Slack also needs Secrets Manager and the Parameters and Secrets Lambda Extension. SNS needs `sns:Publish` on the topic you pass. EventBridge needs `events:PutEvents` on the bus you pass. The construct adds those permissions for the channel you select.
+
+## Notes
+
+- Choose one notification channel. Logs, Slack, SNS, and EventBridge are not combined.
+- The construct does not create an SNS topic, an email subscription, or an EventBridge bus. Alarm topics are also passed in and are separate from `notification`.
+- SNS email is the plain-text `Message`. The `Subject` is the same parent line Slack uses. Emoji are included. HTML is not sent.
+- A notification send failure does not fail the start/stop run. A Slack secret with the wrong JSON shape does.
+- Start/stop IAM allows `ec2:StartInstances` and `ec2:StopInstances` only on instances in this account and region whose tag matches `targetResource`. Describe and tag lookup remain `Resource: *` because those APIs do not support resource-level permissions.
+
+## Troubleshooting
+
+- **No Slack message, email, or event** – The function log group (default retention three months) is the place to look. After a successful create, stack deletion keeps that group (`RetainExceptOnCreate`). Omit `notification` and the run only writes `running-scheduler: notification` there. If the tag matches nothing, the run returns `TargetResourcesNotFound` and does not send.
+- **Slack fails before any instance starts** – The secret must be JSON with non-empty `token` and `channel`. That configuration error fails the run. A later `chat.postMessage` error is logged as `running-scheduler: notification post failed` and does not fail the run.
+- **SNS topic has no email** – Add an email subscription on the topic you passed. The scheduler only publishes.
 
 ## License
 

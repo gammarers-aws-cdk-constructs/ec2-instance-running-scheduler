@@ -1,17 +1,36 @@
 import { App, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack } from '../src';
+import { LambdaFailureDetector } from 'lambda-failure-detector';
+import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack, RunningSchedulerFailureDetection } from '../src';
 
 const baseProps = {
   targetResource: {
     tagKey: 'WorkHoursRunning',
     tagValues: ['YES'],
   },
-  secrets: {
-    slackSecretName: 'test/slack-webhook',
-  },
+};
+
+/**
+ * Function, alias, and both schedules that every running-scheduler stack wires.
+ */
+const expectDurableSchedulerWiring = (template: Template): void => {
+  template.resourceCountIs('AWS::Lambda::Function', 1);
+  template.resourceCountIs('AWS::Lambda::Alias', 1);
+  template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+};
+
+interface SchedulerScheduleResource {
+  readonly Properties?: {
+    readonly State?: string;
+  };
+}
+
+const isSchedulerScheduleResource = (value: unknown): value is SchedulerScheduleResource => {
+  return typeof value === 'object' && value !== null;
 };
 
 describe('EC2InstanceRunningScheduleStack', () => {
@@ -22,22 +41,15 @@ describe('EC2InstanceRunningScheduleStack', () => {
     });
     const template = Template.fromStack(stack);
 
-    it('Should have Scheduler 2 exist', () => {
-      template.resourceCountIs('AWS::Scheduler::Schedule', 2);
-    });
-
-    it('Should have Lambda 1 exist', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 1);
-    });
-
-    it('Should have Lambda Alias for Durable invocation', () => {
-      template.resourceCountIs('AWS::Lambda::Alias', 1);
+    it('Should wire the durable scheduler', () => {
+      expectDurableSchedulerWiring(template);
     });
 
     it('Should set default resource wait limits and concurrency on Lambda', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: {
+            NOTIFICATION_CHANNEL: 'logs',
             PROCESS_RESOURCE_MAX_LOOP_COUNT: '90',
             PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '1800',
             PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS: '20',
@@ -53,13 +65,13 @@ describe('EC2InstanceRunningScheduleStack', () => {
       });
     });
 
-    it('Should retain logs for three months and destroy on stack removal', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 90,
-      });
+    it('Should retain logs for three months and keep them after a successful create', () => {
       template.hasResource('AWS::Logs::LogGroup', {
-        DeletionPolicy: 'Delete',
-        UpdateReplacePolicy: 'Delete',
+        DeletionPolicy: 'RetainExceptOnCreate',
+        UpdateReplacePolicy: 'Retain',
+        Properties: Match.objectLike({
+          RetentionInDays: 90,
+        }),
       });
     });
 
@@ -133,9 +145,14 @@ describe('EC2InstanceRunningScheduleStack', () => {
     const template = Template.fromStack(stack);
 
     it('Should have Scheduler 2 exist but disabled', () => {
-      template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+      expectDurableSchedulerWiring(template);
       const schedules = template.findResources('AWS::Scheduler::Schedule');
-      const states = Object.values(schedules).map((r: any) => r.Properties?.State);
+      const states = Object.values(schedules).flatMap((resource) => {
+        if (!isSchedulerScheduleResource(resource)) {
+          return [];
+        }
+        return [resource.Properties?.State];
+      });
       expect(states).toEqual(['DISABLED', 'DISABLED']);
     });
 
@@ -164,8 +181,8 @@ describe('EC2InstanceRunningScheduleStack', () => {
     });
     const template = Template.fromStack(stack);
 
-    it('Should have Scheduler 2 exist', () => {
-      template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+    it('Should wire the durable scheduler', () => {
+      expectDurableSchedulerWiring(template);
     });
 
     it('Should have Start Scheduler with Asia/Tokyo', () => {
@@ -180,14 +197,6 @@ describe('EC2InstanceRunningScheduleStack', () => {
         ScheduleExpression: 'cron(5 19 ? * MON-FRI *)',
         ScheduleExpressionTimezone: 'Asia/Tokyo',
       });
-    });
-
-    it('Should have Lambda 1 exist', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 1);
-    });
-
-    it('Should have Lambda Alias for Durable invocation', () => {
-      template.resourceCountIs('AWS::Lambda::Alias', 1);
     });
 
     it('Should match snapshot', () => {
@@ -216,7 +225,7 @@ describe('EC2InstanceRunningScheduler resourceWait', () => {
           PROCESS_RESOURCE_MAX_LOOP_COUNT: '42',
           PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '900',
           PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS: '5',
-          SLACK_SECRET_NAME: baseProps.secrets.slackSecretName,
+          NOTIFICATION_CHANNEL: 'logs',
         },
       },
     });
@@ -381,8 +390,16 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
     });
     const template = Template.fromStack(stack);
 
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 5);
     template.resourceCountIs('AWS::Logs::MetricFilter', 3);
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'Errors',
+      Namespace: 'AWS/Lambda',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'Throttles',
+      Namespace: 'AWS/Lambda',
+    });
     template.hasResourceProperties('AWS::Logs::MetricFilter', {
       FilterPattern: '"ResourceWaitFailed"',
       MetricTransformations: [{
@@ -391,10 +408,10 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
       }],
     });
     template.hasResourceProperties('AWS::Logs::MetricFilter', {
-      FilterPattern: '"running-scheduler: Slack post failed"',
+      FilterPattern: '"running-scheduler: notification post failed"',
       MetricTransformations: [{
         MetricNamespace: 'EC2InstanceRunningScheduler',
-        MetricName: 'SlackPostFailure',
+        MetricName: 'NotificationPostFailure',
       }],
     });
   });
@@ -436,6 +453,143 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
     template.resourceCountIs('AWS::SNS::Topic', 0);
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
       AlarmActions: [alarmTopicArn],
+    });
+  });
+
+  it('throws when a required log filter alarm is missing', () => {
+    const findLogFilterAlarm = jest.spyOn(LambdaFailureDetector.prototype, 'findLogFilterAlarm').mockReturnValue(undefined);
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    const logGroup = new logs.LogGroup(stack, 'Logs');
+    const runningScheduleFunction = new lambda.Function(stack, 'RunningSchedule', {
+      runtime: lambda.Runtime.NODEJS_24_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline('exports.handler = async () => undefined;'),
+    });
+
+    try {
+      expect(() => {
+        new RunningSchedulerFailureDetection(stack, 'Detection', {
+          runningScheduleFunction,
+          logGroup,
+        });
+      }).toThrow('RunningSchedulerFailureDetection: missing log filter alarm for id "InstanceStatusFailure".');
+    } finally {
+      findLogFilterAlarm.mockRestore();
+    }
+  });
+});
+
+describe('EC2InstanceRunningScheduler notification', () => {
+  it('throws when the Slack secret name is blank', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+
+    expect(() => {
+      new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+        ...baseProps,
+        notification: {
+          channel: 'slack',
+          slackSecretName: '  ',
+        },
+      });
+    }).toThrow(/slackSecretName/);
+  });
+
+  it('grants Slack secret read and sets the secret name when Slack is selected', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      notification: {
+        channel: 'slack',
+        slackSecretName: 'test/slack',
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          NOTIFICATION_CHANNEL: 'slack',
+          SLACK_SECRET_NAME: 'test/slack',
+        },
+      },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith(['secretsmanager:GetSecretValue']),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('grants sns:Publish on the provided topic and does not create a topic', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    const topicArn = 'arn:aws:sns:ap-northeast-1:123456789012:ops-notify';
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      notification: {
+        channel: 'sns',
+        topic: sns.Topic.fromTopicArn(stack, 'NotifyTopic', topicArn),
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::SNS::Topic', 0);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          NOTIFICATION_CHANNEL: 'sns',
+          NOTIFICATION_TOPIC_ARN: topicArn,
+        },
+      },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: 'sns:Publish',
+            Resource: topicArn,
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('grants events:PutEvents on the provided custom bus', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    new EC2InstanceRunningScheduler(stack, 'Scheduler', {
+      ...baseProps,
+      notification: {
+        channel: 'eventBridge',
+        eventBus: events.EventBus.fromEventBusName(stack, 'NotifyBus', 'ops-bus'),
+      },
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::Events::EventBus', 0);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          NOTIFICATION_CHANNEL: 'eventBridge',
+          NOTIFICATION_EVENT_BUS_NAME: 'ops-bus',
+        },
+      },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: 'events:PutEvents',
+          }),
+        ]),
+      },
     });
   });
 });
