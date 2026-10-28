@@ -1,10 +1,12 @@
 import { ArnFormat, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
+import * as events from 'aws-cdk-lib/aws-events';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import {
   createRunningSchedulerFailureDetection,
@@ -22,6 +24,16 @@ import {
   PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
   PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
 } from '../funcs/running-scheduler-wait-config';
+import {
+  NOTIFICATION_CHANNEL_ENV,
+  NOTIFICATION_CHANNEL_EVENT_BRIDGE,
+  NOTIFICATION_CHANNEL_LOGS,
+  NOTIFICATION_CHANNEL_SLACK,
+  NOTIFICATION_CHANNEL_SNS,
+  NOTIFICATION_EVENT_BUS_NAME_ENV,
+  NOTIFICATION_TOPIC_ARN_ENV,
+  SLACK_SECRET_NAME_ENV,
+} from '../settings/consts';
 
 export type {
   RunningSchedulerFailureDetection,
@@ -68,12 +80,46 @@ export interface TargetResource {
 }
 
 /**
- * Secret identifiers required by the scheduler (e.g. Slack).
+ * Slack notification. The construct grants secret read and attaches the Parameters and Secrets extension.
+ *
+ * The secret JSON must contain non-empty `token` and `channel` strings.
  */
-export interface Secrets {
-  /** Name of the Secrets Manager secret containing Slack token and channel. */
+export interface SlackNotification {
+  /** Selects Slack. */
+  readonly channel: typeof NOTIFICATION_CHANNEL_SLACK;
+  /** Name of the Secrets Manager secret containing Slack `token` and `channel`. */
   readonly slackSecretName: string;
 }
+
+/**
+ * Amazon SNS notification. The construct grants `sns:Publish` on {@link topic} and does not create the topic.
+ *
+ * Email subscriptions receive one plain-text message per run. HTML is not used.
+ */
+export interface SnsNotification {
+  /** Selects Amazon SNS. */
+  readonly channel: typeof NOTIFICATION_CHANNEL_SNS;
+  /** Existing topic. Attach an email subscription on this topic to deliver mail. */
+  readonly topic: sns.ITopic;
+}
+
+/**
+ * EventBridge custom-bus notification. The construct grants `events:PutEvents` and does not create the bus or rules.
+ */
+export interface EventBridgeNotification {
+  /** Selects an EventBridge custom bus. */
+  readonly channel: typeof NOTIFICATION_CHANNEL_EVENT_BRIDGE;
+  /** Existing custom event bus. */
+  readonly eventBus: events.IEventBus;
+}
+
+/**
+ * Where a completed run is reported.
+ *
+ * Omit {@link EC2InstanceRunningSchedulerProps.notification} to log the same text and send nothing else.
+ * Only one channel is accepted.
+ */
+export type RunningSchedulerNotification = SlackNotification | SnsNotification | EventBridgeNotification;
 
 /**
  * CDK-side limits for per-instance stable-state waiting in the Durable Lambda handler.
@@ -183,8 +229,12 @@ export interface EC2InstanceRunningSchedulerProps {
   readonly targetResource: TargetResource;
   /** Whether EventBridge Scheduler rules are enabled. Defaults to true if omitted. */
   readonly enableScheduling?: boolean;
-  /** Secrets (e.g. Slack) used for notifications. */
-  readonly secrets: Secrets;
+  /**
+   * Where to report a completed run.
+   *
+   * @default logs only (no Slack, SNS, or EventBridge permissions)
+   */
+  readonly notification?: RunningSchedulerNotification;
   /** Cron schedule for stopping instances. */
   readonly stopSchedule?: Schedule;
   /** Cron schedule for starting instances. */
@@ -248,6 +298,52 @@ const resolvePositiveInteger = (name: string, value: number | undefined, default
 };
 
 /**
+ * Rejects a Slack channel whose secret name is blank.
+ *
+ * @param notification - Optional notification channel.
+ * @throws {Error} When `notification.slackSecretName` is empty or whitespace.
+ */
+const assertNotification = (notification: RunningSchedulerNotification | undefined): void => {
+  if (!notification || notification.channel !== NOTIFICATION_CHANNEL_SLACK) {
+    return;
+  }
+  if (notification.slackSecretName.trim() !== '') {
+    return;
+  }
+  throw new Error('notification.slackSecretName must be a non-empty string');
+};
+
+/**
+ * Environment variables that select the notification channel at runtime.
+ *
+ * @param notification - Optional notification channel.
+ * @returns Variables merged onto the running scheduler function.
+ */
+const notificationEnvironment = (
+  notification: RunningSchedulerNotification | undefined,
+): { [key: string]: string } => {
+  if (!notification) {
+    return { [NOTIFICATION_CHANNEL_ENV]: NOTIFICATION_CHANNEL_LOGS };
+  }
+  if (notification.channel === NOTIFICATION_CHANNEL_SLACK) {
+    return {
+      [NOTIFICATION_CHANNEL_ENV]: notification.channel,
+      [SLACK_SECRET_NAME_ENV]: notification.slackSecretName,
+    };
+  }
+  if (notification.channel === NOTIFICATION_CHANNEL_SNS) {
+    return {
+      [NOTIFICATION_CHANNEL_ENV]: notification.channel,
+      [NOTIFICATION_TOPIC_ARN_ENV]: notification.topic.topicArn,
+    };
+  }
+  return {
+    [NOTIFICATION_CHANNEL_ENV]: notification.channel,
+    [NOTIFICATION_EVENT_BUS_NAME_ENV]: notification.eventBus.eventBusName,
+  };
+};
+
+/**
  * Ensures {@link TargetResource} can be used in IAM `aws:ResourceTag` conditions.
  *
  * @param targetResource - Tag key and values used to select EC2 instances.
@@ -305,7 +401,8 @@ const taggedInstanceStartStopStatement = (
  * Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
  *
  * Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
- * the Resource Groups Tagging API and EC2 APIs; Slack notifications use the secret named in {@link Secrets.slackSecretName}.
+ * the Resource Groups Tagging API and EC2 APIs. Notification uses {@link EC2InstanceRunningSchedulerProps.notification}
+ * (logs only when omitted).
  *
  * Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
  * and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
@@ -325,7 +422,7 @@ export class EC2InstanceRunningScheduler extends Construct {
    *
    * @param scope - Parent construct.
    * @param id - Construct id.
-   * @param props - Target tags, schedules, Slack secret, schedule enable flag, optional
+   * @param props - Target tags, schedules, optional notification channel, schedule enable flag, optional
    *   {@link ResourceWaitLimits}, {@link RunningSchedulerRuntimeProps},
    *   {@link RunningSchedulerDurableProps}, {@link RunningSchedulerLogGroupProps},
    *   and optional {@link RunningSchedulerFailureDetectionProps}.
@@ -334,8 +431,11 @@ export class EC2InstanceRunningScheduler extends Construct {
     super(scope, id);
 
     assertTargetResourceForIam(props.targetResource);
+    assertNotification(props.notification);
 
-    const slackSecret = Secret.fromSecretNameV2(this, 'SlackSecret', props.secrets.slackSecretName);
+    const slackSecret = props.notification?.channel === NOTIFICATION_CHANNEL_SLACK
+      ? Secret.fromSecretNameV2(this, 'SlackSecret', props.notification.slackSecretName)
+      : undefined;
 
     const maxLoopCount = resolvePositiveInteger(
       'resourceWait.maxLoopCount',
@@ -381,19 +481,23 @@ export class EC2InstanceRunningScheduler extends Construct {
         retentionPeriod: props.durable?.retentionPeriod ?? DEFAULT_DURABLE_RETENTION_PERIOD,
       },
       environment: {
-        SLACK_SECRET_NAME: props.secrets.slackSecretName,
+        ...notificationEnvironment(props.notification),
         [PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV]: String(maxLoopCount),
         [PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV]: String(maxElapsedSeconds),
         [PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV]: String(statusChangeWaitSeconds),
         [PROCESS_RESOURCES_MAX_CONCURRENCY_ENV]: String(maxConcurrency),
       },
-      paramsAndSecrets: lambda.ParamsAndSecretsLayerVersion.fromVersion(lambda.ParamsAndSecretsVersions.V1_0_103, {
-        // Required by aws-lambda-secret-fetcher (extension HTTP API on localhost; port from PARAMETERS_SECRETS_EXTENSION_HTTP_PORT).
-        cacheSize: 500,
-        logLevel: lambda.ParamsAndSecretsLogLevel.INFO,
-      }),
+      ...(slackSecret
+        ? {
+          paramsAndSecrets: lambda.ParamsAndSecretsLayerVersion.fromVersion(lambda.ParamsAndSecretsVersions.V1_0_103, {
+            // Required by aws-lambda-secret-fetcher (extension HTTP API on localhost; port from PARAMETERS_SECRETS_EXTENSION_HTTP_PORT).
+            cacheSize: 500,
+            logLevel: lambda.ParamsAndSecretsLogLevel.INFO,
+          }),
+        }
+        : {}),
       role: new iam.Role(this, 'RunningSchedulerFunctionRole', {
-        description: 'Allows the running scheduler to describe instances and start/stop tagged EC2 instances, and to read Slack secrets.',
+        description: 'Allows the running scheduler to describe instances, start/stop tagged EC2 instances, and send the configured notification.',
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
@@ -426,8 +530,15 @@ export class EC2InstanceRunningScheduler extends Construct {
     runningScheduleFunction.addToRolePolicy(
       taggedInstanceStartStopStatement(this, props.targetResource),
     );
-    // Grant read access to the Slack secret
-    slackSecret.grantRead(runningScheduleFunction);
+    if (slackSecret) {
+      slackSecret.grantRead(runningScheduleFunction);
+    }
+    if (props.notification?.channel === NOTIFICATION_CHANNEL_SNS) {
+      props.notification.topic.grantPublish(runningScheduleFunction);
+    }
+    if (props.notification?.channel === NOTIFICATION_CHANNEL_EVENT_BRIDGE) {
+      props.notification.eventBus.grantPutEventsTo(runningScheduleFunction);
+    }
 
     this.failureDetection = createRunningSchedulerFailureDetection(this, 'FailureDetection', {
       failureDetection: props.failureDetection,

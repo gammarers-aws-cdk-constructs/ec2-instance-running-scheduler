@@ -9,12 +9,13 @@ import {
   type LambdaFailureDetection,
   type LogFailureFilter,
 } from './lambda-failure-detector/lambda-failure-detector';
+import { NOTIFICATION_POST_FAILED_LOG } from '../settings/consts';
 
 /** CloudWatch custom metric namespace for running-scheduler log-based failure metrics. */
 const METRIC_NAMESPACE = 'EC2InstanceRunningScheduler';
 
 const INSTANCE_STATUS_FAILURE_ID = 'InstanceStatusFailure';
-const SLACK_POST_FAILURE_ID = 'SlackPostFailure';
+const NOTIFICATION_POST_FAILURE_ID = 'NotificationPostFailure';
 const DURABLE_EXECUTION_FAILURE_ID = 'DurableExecutionFailure';
 
 /**
@@ -30,14 +31,14 @@ const RUNNING_SCHEDULER_LOG_FILTERS: LogFailureFilter[] = [
     metricName: 'InstanceStatusFailure',
   },
   {
-    id: SLACK_POST_FAILURE_ID,
-    filterPattern: '"running-scheduler: Slack post failed"',
+    id: NOTIFICATION_POST_FAILURE_ID,
+    filterPattern: `"${NOTIFICATION_POST_FAILED_LOG}"`,
     metricNamespace: METRIC_NAMESPACE,
-    metricName: 'SlackPostFailure',
+    metricName: 'NotificationPostFailure',
   },
   {
     id: DURABLE_EXECUTION_FAILURE_ID,
-    filterPattern: '"ERROR" - "processOneResource" - "ResourceWaitFailed" - "running-scheduler: Slack post failed"',
+    filterPattern: `"ERROR" - "processOneResource" - "ResourceWaitFailed" - "${NOTIFICATION_POST_FAILED_LOG}"`,
     metricNamespace: METRIC_NAMESPACE,
     metricName: 'DurableExecutionFailure',
   },
@@ -102,7 +103,7 @@ const requireLogFilterAlarm = (
  * Extends {@link LambdaFailureDetector} with scheduler-specific log filters:
  * - `lambdaErrorsAlarm` – `AWS/Lambda` `Errors` metric.
  * - `instanceStatusFailureAlarm` – log filter for `ResourceWaitFailed:*`.
- * - `slackPostFailureAlarm` – log filter for `running-scheduler: Slack post failed`.
+ * - `notificationPostFailureAlarm` – log filter for `running-scheduler: notification post failed`.
  * - `durableExecutionFailureAlarm` – other handler-level `ERROR` logs (excluding the above).
  *
  * Custom metrics are published under the `EC2InstanceRunningScheduler` namespace.
@@ -110,9 +111,9 @@ const requireLogFilterAlarm = (
 export class RunningSchedulerFailureDetection extends LambdaFailureDetector {
   /** Fires when instance stable-state waiting fails (`ResourceWaitFailed:*`). */
   public readonly instanceStatusFailureAlarm: cloudwatch.Alarm;
-  /** Fires when Slack `chat.postMessage` fails. */
-  public readonly slackPostFailureAlarm: cloudwatch.Alarm;
-  /** Fires on handler-level ERROR logs outside instance waiting and Slack post failures. */
+  /** Fires when a configured Slack, SNS, or EventBridge notification send fails. */
+  public readonly notificationPostFailureAlarm: cloudwatch.Alarm;
+  /** Fires on handler-level ERROR logs outside instance waiting and notification post failures. */
   public readonly durableExecutionFailureAlarm: cloudwatch.Alarm;
 
   /**
@@ -129,7 +130,7 @@ export class RunningSchedulerFailureDetection extends LambdaFailureDetector {
     });
 
     this.instanceStatusFailureAlarm = requireLogFilterAlarm(this, INSTANCE_STATUS_FAILURE_ID);
-    this.slackPostFailureAlarm = requireLogFilterAlarm(this, SLACK_POST_FAILURE_ID);
+    this.notificationPostFailureAlarm = requireLogFilterAlarm(this, NOTIFICATION_POST_FAILURE_ID);
     this.durableExecutionFailureAlarm = requireLogFilterAlarm(this, DURABLE_EXECUTION_FAILURE_ID);
   }
 }
