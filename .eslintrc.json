@@ -159,7 +159,7 @@
           "**/test/**",
           "**/build-tools/**",
           "src/funcs/running-scheduler.lambda.ts",
-          "src/funcs/running-scheduler-wait-env.ts",
+          "src/funcs/**/*.ts",
           ".projenrc.ts",
           "projenrc/**/*.ts"
         ],
@@ -215,6 +215,14 @@
           "constructor",
           "method"
         ]
+      }
+    ],
+    "max-len": [
+      "error",
+      {
+        "code": 160,
+        "ignoreUrls": true,
+        "ignoreStrings": true
       }
     ]
   },

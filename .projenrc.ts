@@ -1,5 +1,4 @@
 import { ProjenCdkConstructLibrary } from '@gammarers/projen-projects';
-import { awscdk } from 'projen';
 const project = new ProjenCdkConstructLibrary({
   cdkVersion: '2.232.0',
   defaultReleaseBranch: 'main',
@@ -11,7 +10,7 @@ const project = new ProjenCdkConstructLibrary({
     'lambda-failure-detector@^0.2.1',
   ],
   devDeps: [
-    '@gammarers/projen-projects@^0.4.0',
+    '@gammarers/projen-projects@^0.6.2',
     '@aws/durable-execution-sdk-js@^1.1.7',
     '@aws-sdk/client-ec2@^3.1111.0',
     '@aws-sdk/client-eventbridge@^3.1111.0',
@@ -27,23 +26,7 @@ const project = new ProjenCdkConstructLibrary({
   ],
   releaseToNpm: true,
   npmTrustedPublishing: true,
-  jestOptions: {
-    extraCliOptions: ['--silent'],
-  },
-  tsconfigDev: {
-    compilerOptions: {
-      strict: true,
-    },
-  },
-  lambdaOptions: {
-    // target node.js runtime
-    runtime: awscdk.LambdaRuntime.NODEJS_24_X,
-    bundlingOptions: {
-      // list of node modules to exclude from the bundle
-      externals: ['@aws-sdk/*'],
-      sourcemap: true,
-    },
-  },
 });
-project.eslint?.allowDevDeps('src/funcs/running-scheduler-wait-env.ts');
+// Lambda handlers under src/funcs bundle devDependencies and are not part of the published construct API.
+project.eslint?.allowDevDeps('src/funcs/**/*.ts');
 project.synth();

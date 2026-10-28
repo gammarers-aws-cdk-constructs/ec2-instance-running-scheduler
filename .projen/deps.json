@@ -27,7 +27,7 @@
     },
     {
       "name": "@gammarers/projen-projects",
-      "version": "^0.4.0",
+      "version": "^0.6.2",
       "type": "build"
     },
     {

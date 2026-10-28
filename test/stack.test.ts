@@ -1,9 +1,11 @@
 import { App, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as events from 'aws-cdk-lib/aws-events';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack } from '../src';
+import { LambdaFailureDetector } from 'lambda-failure-detector';
+import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack, RunningSchedulerFailureDetection } from '../src';
 
 const baseProps = {
   targetResource: {
@@ -452,6 +454,29 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
       AlarmActions: [alarmTopicArn],
     });
+  });
+
+  it('throws when a required log filter alarm is missing', () => {
+    const findLogFilterAlarm = jest.spyOn(LambdaFailureDetector.prototype, 'findLogFilterAlarm').mockReturnValue(undefined);
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+    const logGroup = new logs.LogGroup(stack, 'Logs');
+    const runningScheduleFunction = new lambda.Function(stack, 'RunningSchedule', {
+      runtime: lambda.Runtime.NODEJS_24_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline('exports.handler = async () => undefined;'),
+    });
+
+    try {
+      expect(() => {
+        new RunningSchedulerFailureDetection(stack, 'Detection', {
+          runningScheduleFunction,
+          logGroup,
+        });
+      }).toThrow('RunningSchedulerFailureDetection: missing log filter alarm for id "InstanceStatusFailure".');
+    } finally {
+      findLogFilterAlarm.mockRestore();
+    }
   });
 });
 
