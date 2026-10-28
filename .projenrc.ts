@@ -7,6 +7,9 @@ const project = new ProjenCdkConstructLibrary({
   repositoryUrl: 'https://github.com/gammarers-aws-cdk-constructs/ec2-instance-running-scheduler.git',
   description: 'AWS CDK construct library that starts and stops tagged EC2 instances on a cron schedule with EventBridge Scheduler and a Durable Execution Lambda, and optionally reports results to CloudWatch Logs, Slack, Amazon SNS, or an EventBridge custom bus.',
   keywords: ['cdk', 'ec2', 'scheduler', 'durable', 'execution', 'lambda', 'slack', 'sns', 'eventbridge'],
+  peerDeps: [
+    'lambda-failure-detector@^0.2.1',
+  ],
   devDeps: [
     '@gammarers/projen-projects@^0.4.0',
     '@aws/durable-execution-sdk-js@^1.1.7',

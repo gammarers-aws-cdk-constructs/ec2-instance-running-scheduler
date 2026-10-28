@@ -388,8 +388,16 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
     });
     const template = Template.fromStack(stack);
 
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 5);
     template.resourceCountIs('AWS::Logs::MetricFilter', 3);
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'Errors',
+      Namespace: 'AWS/Lambda',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'Throttles',
+      Namespace: 'AWS/Lambda',
+    });
     template.hasResourceProperties('AWS::Logs::MetricFilter', {
       FilterPattern: '"ResourceWaitFailed"',
       MetricTransformations: [{

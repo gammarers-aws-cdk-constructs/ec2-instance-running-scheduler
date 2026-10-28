@@ -8,7 +8,7 @@ import {
   LambdaFailureDetector,
   type LambdaFailureDetection,
   type LogFailureFilter,
-} from './lambda-failure-detector';
+} from 'lambda-failure-detector';
 import { NOTIFICATION_POST_FAILED_LOG } from './settings/consts';
 
 /** CloudWatch custom metric namespace for running-scheduler log-based failure metrics. */
@@ -100,8 +100,10 @@ const requireLogFilterAlarm = (
 /**
  * CloudWatch alarms and log-based metrics for the EC2 instance running scheduler.
  *
- * Extends {@link LambdaFailureDetector} with scheduler-specific log filters:
+ * Extends {@link LambdaFailureDetector} with scheduler-specific log filters.
+ * Platform alarms from `lambda-failure-detector` include `Errors` and `Throttles`.
  * - `lambdaErrorsAlarm` – `AWS/Lambda` `Errors` metric.
+ * - `lambdaThrottlesAlarm` – `AWS/Lambda` `Throttles` metric.
  * - `instanceStatusFailureAlarm` – log filter for `ResourceWaitFailed:*`.
  * - `notificationPostFailureAlarm` – log filter for `running-scheduler: notification post failed`.
  * - `durableExecutionFailureAlarm` – other handler-level `ERROR` logs (excluding the above).
