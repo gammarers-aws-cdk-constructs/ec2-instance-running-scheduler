@@ -3,7 +3,7 @@ import {
   getWaitAbortReason,
   isDesiredStableState,
   isTransitioningState,
-} from '../src/funcs/running-scheduler-predicates';
+} from '../src/funcs/core/running-scheduler-predicates';
 
 describe('isDesiredStableState', () => {
   it.each([

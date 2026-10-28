@@ -12,6 +12,25 @@ const baseProps = {
   },
 };
 
+/**
+ * Function, alias, and both schedules that every running-scheduler stack wires.
+ */
+const expectDurableSchedulerWiring = (template: Template): void => {
+  template.resourceCountIs('AWS::Lambda::Function', 1);
+  template.resourceCountIs('AWS::Lambda::Alias', 1);
+  template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+};
+
+interface SchedulerScheduleResource {
+  readonly Properties?: {
+    readonly State?: string;
+  };
+}
+
+const isSchedulerScheduleResource = (value: unknown): value is SchedulerScheduleResource => {
+  return typeof value === 'object' && value !== null;
+};
+
 describe('EC2InstanceRunningScheduleStack', () => {
   describe('default (scheduling enabled, default schedule)', () => {
     const app = new App();
@@ -20,16 +39,8 @@ describe('EC2InstanceRunningScheduleStack', () => {
     });
     const template = Template.fromStack(stack);
 
-    it('Should have Scheduler 2 exist', () => {
-      template.resourceCountIs('AWS::Scheduler::Schedule', 2);
-    });
-
-    it('Should have Lambda 1 exist', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 1);
-    });
-
-    it('Should have Lambda Alias for Durable invocation', () => {
-      template.resourceCountIs('AWS::Lambda::Alias', 1);
+    it('Should wire the durable scheduler', () => {
+      expectDurableSchedulerWiring(template);
     });
 
     it('Should set default resource wait limits and concurrency on Lambda', () => {
@@ -52,13 +63,13 @@ describe('EC2InstanceRunningScheduleStack', () => {
       });
     });
 
-    it('Should retain logs for three months and destroy on stack removal', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 90,
-      });
+    it('Should retain logs for three months and keep them after a successful create', () => {
       template.hasResource('AWS::Logs::LogGroup', {
-        DeletionPolicy: 'Delete',
-        UpdateReplacePolicy: 'Delete',
+        DeletionPolicy: 'RetainExceptOnCreate',
+        UpdateReplacePolicy: 'Retain',
+        Properties: Match.objectLike({
+          RetentionInDays: 90,
+        }),
       });
     });
 
@@ -132,9 +143,14 @@ describe('EC2InstanceRunningScheduleStack', () => {
     const template = Template.fromStack(stack);
 
     it('Should have Scheduler 2 exist but disabled', () => {
-      template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+      expectDurableSchedulerWiring(template);
       const schedules = template.findResources('AWS::Scheduler::Schedule');
-      const states = Object.values(schedules).map((r: any) => r.Properties?.State);
+      const states = Object.values(schedules).flatMap((resource) => {
+        if (!isSchedulerScheduleResource(resource)) {
+          return [];
+        }
+        return [resource.Properties?.State];
+      });
       expect(states).toEqual(['DISABLED', 'DISABLED']);
     });
 
@@ -163,8 +179,8 @@ describe('EC2InstanceRunningScheduleStack', () => {
     });
     const template = Template.fromStack(stack);
 
-    it('Should have Scheduler 2 exist', () => {
-      template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+    it('Should wire the durable scheduler', () => {
+      expectDurableSchedulerWiring(template);
     });
 
     it('Should have Start Scheduler with Asia/Tokyo', () => {
@@ -179,14 +195,6 @@ describe('EC2InstanceRunningScheduleStack', () => {
         ScheduleExpression: 'cron(5 19 ? * MON-FRI *)',
         ScheduleExpressionTimezone: 'Asia/Tokyo',
       });
-    });
-
-    it('Should have Lambda 1 exist', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 1);
-    });
-
-    it('Should have Lambda Alias for Durable invocation', () => {
-      template.resourceCountIs('AWS::Lambda::Alias', 1);
     });
 
     it('Should match snapshot', () => {

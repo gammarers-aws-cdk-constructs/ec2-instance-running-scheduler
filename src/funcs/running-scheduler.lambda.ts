@@ -33,7 +33,7 @@ import {
   isDesiredStableState,
   isTransitioningState,
   type ResourceWaitLimits,
-} from './running-scheduler-predicates';
+} from './core/running-scheduler-predicates';
 import {
   parseMaxConcurrencyFromEnv,
   parseNotificationFromEnv,
@@ -270,20 +270,20 @@ const processOneResource = async (
       continue;
     }
 
-    if (!isDesiredStableState(mode, currentState)) {
-      if (isTransitioningState(mode, currentState)) {
-        ctx.logger.info('processOneResource: wait while transitioning', {
-          identifier,
-          loopCount,
-          currentState,
-          mode,
-          seconds: waitLimits.statusChangeWaitSeconds,
-        });
-        await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
-        loopCount += 1;
-        continue;
-      }
+    if (isTransitioningState(mode, currentState)) {
+      ctx.logger.info('processOneResource: wait while transitioning', {
+        identifier,
+        loopCount,
+        currentState,
+        mode,
+        seconds: waitLimits.statusChangeWaitSeconds,
+      });
+      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
+      loopCount += 1;
+      continue;
+    }
 
+    if (!isDesiredStableState(mode, currentState)) {
       const message = formatResourceWaitFailure('UnexpectedInstanceState', {
         identifier,
         mode,

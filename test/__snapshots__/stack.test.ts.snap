@@ -23,7 +23,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "bc8a1784a30c4b04505c48e2a4d73157a6e645adb99cd0ebe289600862798e35.zip",
+          "S3Key": "204eb3b4006d3b12514b7d043c97a6f9256c8855cf5a1d21b1dcff7b95973bd9.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -68,7 +68,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660167efe00bfa7b86bc1db8dad172ed55b1",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660133f92d0fadbbfbb8300dbbc426f185cb",
             "Version",
           ],
         },
@@ -76,7 +76,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660167efe00bfa7b86bc1db8dad172ed55b1": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660133f92d0fadbbfbb8300dbbc426f185cb": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -98,12 +98,12 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
       "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
-      "DeletionPolicy": "Delete",
+      "DeletionPolicy": "RetainExceptOnCreate",
       "Properties": {
         "RetentionInDays": 90,
       },
       "Type": "AWS::Logs::LogGroup",
-      "UpdateReplacePolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
       "Properties": {
@@ -389,7 +389,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "bc8a1784a30c4b04505c48e2a4d73157a6e645adb99cd0ebe289600862798e35.zip",
+          "S3Key": "204eb3b4006d3b12514b7d043c97a6f9256c8855cf5a1d21b1dcff7b95973bd9.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -434,7 +434,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660167efe00bfa7b86bc1db8dad172ed55b1",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660133f92d0fadbbfbb8300dbbc426f185cb",
             "Version",
           ],
         },
@@ -442,7 +442,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660167efe00bfa7b86bc1db8dad172ed55b1": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660133f92d0fadbbfbb8300dbbc426f185cb": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -464,12 +464,12 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
       "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
-      "DeletionPolicy": "Delete",
+      "DeletionPolicy": "RetainExceptOnCreate",
       "Properties": {
         "RetentionInDays": 90,
       },
       "Type": "AWS::Logs::LogGroup",
-      "UpdateReplacePolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
       "Properties": {
@@ -755,7 +755,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "bc8a1784a30c4b04505c48e2a4d73157a6e645adb99cd0ebe289600862798e35.zip",
+          "S3Key": "204eb3b4006d3b12514b7d043c97a6f9256c8855cf5a1d21b1dcff7b95973bd9.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -800,7 +800,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660167efe00bfa7b86bc1db8dad172ed55b1",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660133f92d0fadbbfbb8300dbbc426f185cb",
             "Version",
           ],
         },
@@ -808,7 +808,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660167efe00bfa7b86bc1db8dad172ed55b1": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B9660133f92d0fadbbfbb8300dbbc426f185cb": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -830,12 +830,12 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
       "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
-      "DeletionPolicy": "Delete",
+      "DeletionPolicy": "RetainExceptOnCreate",
       "Properties": {
         "RetentionInDays": 90,
       },
       "Type": "AWS::Logs::LogGroup",
-      "UpdateReplacePolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionRole2BF102BB": {
       "Properties": {

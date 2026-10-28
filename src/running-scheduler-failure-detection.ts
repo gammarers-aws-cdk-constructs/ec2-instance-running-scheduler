@@ -8,8 +8,8 @@ import {
   LambdaFailureDetector,
   type LambdaFailureDetection,
   type LogFailureFilter,
-} from './lambda-failure-detector/lambda-failure-detector';
-import { NOTIFICATION_POST_FAILED_LOG } from '../settings/consts';
+} from './lambda-failure-detector';
+import { NOTIFICATION_POST_FAILED_LOG } from './settings/consts';
 
 /** CloudWatch custom metric namespace for running-scheduler log-based failure metrics. */
 const METRIC_NAMESPACE = 'EC2InstanceRunningScheduler';

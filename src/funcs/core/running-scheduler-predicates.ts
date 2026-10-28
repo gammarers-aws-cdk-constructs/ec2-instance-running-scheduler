@@ -1,6 +1,13 @@
 /**
  * Pure predicates for the EC2 running scheduler Lambda (no AWS SDK).
+ *
+ * Required handler limits. The numeric defaults live in `src/settings/consts.ts`.
  */
+import {
+  DEFAULT_MAX_ELAPSED_SECONDS,
+  DEFAULT_MAX_LOOP_COUNT,
+  DEFAULT_STATUS_CHANGE_WAIT_SECONDS,
+} from '../../settings/consts';
 
 /** Value of `Params.Mode` from the EventBridge Scheduler payload. */
 export type RunningSchedulerMode = 'Start' | 'Stop';
@@ -17,13 +24,10 @@ export interface ResourceWaitLimits {
 
 /** Default wait limits (90 loops × 20s wait ≈ 30 minutes of waits; 30 minutes elapsed). */
 export const DEFAULT_RESOURCE_WAIT_LIMITS: ResourceWaitLimits = {
-  maxLoopCount: 90,
-  maxElapsedSeconds: 1800,
-  statusChangeWaitSeconds: 20,
+  maxLoopCount: DEFAULT_MAX_LOOP_COUNT,
+  maxElapsedSeconds: DEFAULT_MAX_ELAPSED_SECONDS,
+  statusChangeWaitSeconds: DEFAULT_STATUS_CHANGE_WAIT_SECONDS,
 };
-
-/** Default bounded parallelism for durable `map` over target instances. */
-export const DEFAULT_MAX_CONCURRENCY = 10;
 
 /**
  * Why per-instance waiting stopped with an error.

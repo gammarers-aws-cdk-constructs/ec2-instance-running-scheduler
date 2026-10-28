@@ -8,23 +8,17 @@ import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
+import { RunningSchedulerFunction } from './funcs/running-scheduler-function';
 import {
   createRunningSchedulerFailureDetection,
   type RunningSchedulerFailureDetection,
   type RunningSchedulerFailureDetectionProps,
 } from './running-scheduler-failure-detection';
-import { RunningSchedulerFunction } from '../funcs/running-scheduler-function';
 import {
   DEFAULT_MAX_CONCURRENCY,
-  DEFAULT_RESOURCE_WAIT_LIMITS,
-} from '../funcs/running-scheduler-predicates';
-import {
-  PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
-  PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
-  PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
-  PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
-} from '../funcs/running-scheduler-wait-config';
-import {
+  DEFAULT_MAX_ELAPSED_SECONDS,
+  DEFAULT_MAX_LOOP_COUNT,
+  DEFAULT_STATUS_CHANGE_WAIT_SECONDS,
   NOTIFICATION_CHANNEL_ENV,
   NOTIFICATION_CHANNEL_EVENT_BRIDGE,
   NOTIFICATION_CHANNEL_LOGS,
@@ -32,24 +26,12 @@ import {
   NOTIFICATION_CHANNEL_SNS,
   NOTIFICATION_EVENT_BUS_NAME_ENV,
   NOTIFICATION_TOPIC_ARN_ENV,
+  PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV,
+  PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
+  PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
+  PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
   SLACK_SECRET_NAME_ENV,
-} from '../settings/consts';
-
-export type {
-  RunningSchedulerFailureDetection,
-  RunningSchedulerFailureDetectionProps,
-  RunningSchedulerFailureDetectionResourcesProps,
-} from './running-scheduler-failure-detection';
-export {
-  createLambdaFailureDetector,
-  isLambdaFailureDetectionEnabled,
-  LambdaFailureDetector,
-  type CreateLambdaFailureDetectorProps,
-  type LambdaFailureDetection,
-  type LambdaFailureDetectorProps,
-  type LogFailureAlarm,
-  type LogFailureFilter,
-} from './lambda-failure-detector/lambda-failure-detector';
+} from './settings/consts';
 
 /**
  * Cron-style schedule configuration for start/stop actions.
@@ -128,19 +110,19 @@ export type RunningSchedulerNotification = SlackNotification | SnsNotification |
  * {@link PROCESS_RESOURCE_MAX_ELAPSED_SECONDS_ENV} on the running scheduler function.
  * Prevents abnormal or stuck transitions from running until the Durable execution timeout.
  *
- * @see {@link ResourceWaitLimits} in `running-scheduler-predicates.ts` for the handler-side required shape.
+ * The handler reads the same numbers from its environment and applies them as required limits.
  */
 export interface ResourceWaitLimits {
   /**
    * Maximum describe/wait loop iterations per instance.
    *
-   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount} (90)
+   * @default {@link DEFAULT_MAX_LOOP_COUNT} (90)
    */
   readonly maxLoopCount?: number;
   /**
    * Maximum wall-clock seconds spent waiting for a single instance to stabilize.
    *
-   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds} (1800, 30 minutes)
+   * @default {@link DEFAULT_MAX_ELAPSED_SECONDS} (1800, 30 minutes)
    */
   readonly maxElapsedSeconds?: number;
   /**
@@ -148,7 +130,7 @@ export interface ResourceWaitLimits {
    *
    * Lower values detect state changes sooner; higher values reduce DescribeInstances calls.
    *
-   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds} (20)
+   * @default {@link DEFAULT_STATUS_CHANGE_WAIT_SECONDS} (20)
    */
   readonly statusChangeWaitSeconds?: number;
 }
@@ -216,7 +198,10 @@ export interface RunningSchedulerLogGroupProps {
   /**
    * Removal policy for the log group.
    *
-   * @default RemovalPolicy.DESTROY
+   * A failed create deletes the log group. After a successful create, stack
+   * deletion and replacement keep the logs.
+   *
+   * @default RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE
    */
   readonly removalPolicy?: RemovalPolicy;
 }
@@ -242,7 +227,7 @@ export interface EC2InstanceRunningSchedulerProps {
   /**
    * Per-instance wait limits for the running scheduler Lambda.
    *
-   * @default {@link DEFAULT_RESOURCE_WAIT_LIMITS}
+   * @default {@link DEFAULT_MAX_LOOP_COUNT}, {@link DEFAULT_MAX_ELAPSED_SECONDS}, {@link DEFAULT_STATUS_CHANGE_WAIT_SECONDS}
    */
   readonly resourceWait?: ResourceWaitLimits;
   /**
@@ -260,7 +245,7 @@ export interface EC2InstanceRunningSchedulerProps {
   /**
    * CloudWatch Logs retention and removal policy for the function log group.
    *
-   * @default RetentionDays.THREE_MONTHS, RemovalPolicy.DESTROY
+   * @default RetentionDays.THREE_MONTHS, RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE
    */
   readonly logGroup?: RunningSchedulerLogGroupProps;
   /**
@@ -440,17 +425,17 @@ export class EC2InstanceRunningScheduler extends Construct {
     const maxLoopCount = resolvePositiveInteger(
       'resourceWait.maxLoopCount',
       props.resourceWait?.maxLoopCount,
-      DEFAULT_RESOURCE_WAIT_LIMITS.maxLoopCount,
+      DEFAULT_MAX_LOOP_COUNT,
     );
     const maxElapsedSeconds = resolvePositiveInteger(
       'resourceWait.maxElapsedSeconds',
       props.resourceWait?.maxElapsedSeconds,
-      DEFAULT_RESOURCE_WAIT_LIMITS.maxElapsedSeconds,
+      DEFAULT_MAX_ELAPSED_SECONDS,
     );
     const statusChangeWaitSeconds = resolvePositiveInteger(
       'resourceWait.statusChangeWaitSeconds',
       props.resourceWait?.statusChangeWaitSeconds,
-      DEFAULT_RESOURCE_WAIT_LIMITS.statusChangeWaitSeconds,
+      DEFAULT_STATUS_CHANGE_WAIT_SECONDS,
     );
     const maxConcurrency = resolvePositiveInteger(
       'runtime.maxConcurrency',
@@ -467,7 +452,7 @@ export class EC2InstanceRunningScheduler extends Construct {
     // Durable Execution requires Node.js 22+.
     const runningScheduleFunctionLogGroup = new logs.LogGroup(this, 'RunningSchedulerFunctionLogGroup', {
       retention: props.logGroup?.retention ?? logs.RetentionDays.THREE_MONTHS,
-      removalPolicy: props.logGroup?.removalPolicy ?? RemovalPolicy.DESTROY,
+      removalPolicy: props.logGroup?.removalPolicy ?? RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
 
     const runningScheduleFunction = new RunningSchedulerFunction(this, 'RunningSchedulerFunction', {
@@ -549,14 +534,8 @@ export class EC2InstanceRunningScheduler extends Construct {
     // See: https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started-iac.html
     const runningScheduleFunctionAlias = runningScheduleFunction.addAlias('live');
 
-    // Whether schedules are enabled (default true unless explicitly disabled).
-    const scheduleEnabled: boolean = (() => {
-      if (props.enableScheduling === undefined || props.enableScheduling) {
-        return true;
-      } else {
-        return false;
-      }
-    })();
+    // Schedules stay enabled unless the caller sets enableScheduling to false.
+    const scheduleEnabled = props.enableScheduling !== false;
 
     // Durable Functions: Lambda performs tag lookup and instance start/stop in a single run.
     new scheduler.Schedule(this, 'RunningStartSchedule', {

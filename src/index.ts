@@ -5,5 +5,7 @@
  * optional {@link RunningSchedulerFailureDetectionProps} / {@link RunningSchedulerFailureDetection},
  * {@link LambdaFailureDetector} and related prop types.
  */
-export * from './constructs/ec2-instance-running-scheduler';
-export * from './stacks/ec2-instance-running-schedule-stack';
+export * from './ec2-instance-running-scheduler';
+export * from './ec2-instance-running-schedule-stack';
+export * from './lambda-failure-detector';
+export * from './running-scheduler-failure-detection';

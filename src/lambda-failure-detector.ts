@@ -5,11 +5,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
-import {
-  isLambdaFailureDetectionEnabled,
-  type LambdaFailureDetection,
-} from './lambda-failure-detection';
-import type { LogFailureFilter } from './log-failure-filter';
 
 /** Alarm threshold for failure sum metrics. */
 const FAILURE_ALARM_THRESHOLD = 1;
@@ -23,6 +18,58 @@ const FAILURE_ALARM_STATISTIC = 'Sum';
 const LOG_METRIC_VALUE = '1';
 /** Default value when no matching log events occur in the period. */
 const LOG_METRIC_DEFAULT_VALUE = 0;
+
+/**
+ * Opt-in options for {@link LambdaFailureDetector}.
+ *
+ * When {@link LambdaFailureDetection.enabled} is true, alarms are created.
+ * {@link LambdaFailureDetection.alarmTopic} is optional; when omitted, alarms have no SNS actions.
+ * The construct never creates an SNS topic.
+ */
+export interface LambdaFailureDetection {
+  /**
+   * When true, creates failure detection alarms and log-based metrics.
+   *
+   * @default false when omitted
+   */
+  readonly enabled?: boolean;
+  /**
+   * SNS topic for alarm notifications.
+   *
+   * When omitted, alarms are created without SNS actions.
+   */
+  readonly alarmTopic?: sns.ITopic;
+}
+
+/**
+ * Whether {@link LambdaFailureDetection} requests alarm creation.
+ */
+export const isLambdaFailureDetectionEnabled = (
+  failureDetection: LambdaFailureDetection,
+): boolean => failureDetection.enabled === true;
+
+/**
+ * One log-based failure signal for {@link LambdaFailureDetector}.
+ *
+ * Creates a CloudWatch Logs metric filter and an alarm on the resulting sum metric.
+ */
+export interface LogFailureFilter {
+  /**
+   * Stable id used as the MetricFilter / Alarm construct id prefix
+   * (e.g. `InstanceStatusFailure` → `InstanceStatusFailureMetric`).
+   */
+  readonly id: string;
+  /**
+   * CloudWatch Logs filter pattern string passed to `FilterPattern.literal`.
+   *
+   * @example '"ResourceWaitFailed"'
+   */
+  readonly filterPattern: string;
+  /** Custom metric namespace for the metric filter. */
+  readonly metricNamespace: string;
+  /** Custom metric name for the metric filter. */
+  readonly metricName: string;
+}
 
 /**
  * Alarm created for one {@link LogFailureFilter}.
@@ -117,8 +164,6 @@ const createSumAlarm = (
  * Always creates a platform `AWS/Lambda` `Errors` alarm. Optionally creates one
  * metric filter + alarm per {@link LogFailureFilter}. Does not create an SNS topic;
  * pass {@link LambdaFailureDetectorProps.alarmTopic} to attach notifications.
- *
- * Entry module for `lambda-failure-detector/`: import types and helpers from this file only.
  */
 export class LambdaFailureDetector extends Construct {
   /** SNS topic used for alarm actions, when configured. */
@@ -206,7 +251,3 @@ export const createLambdaFailureDetector = (
     logFilters: props.logFilters,
   });
 };
-
-export type { LambdaFailureDetection } from './lambda-failure-detection';
-export { isLambdaFailureDetectionEnabled } from './lambda-failure-detection';
-export type { LogFailureFilter } from './log-failure-filter';
