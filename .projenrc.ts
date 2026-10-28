@@ -23,7 +23,7 @@ const project = new ProjenCdkConstructLibrary({
     'aws-sdk-client-mock@^2.2.0',
     'aws-sdk-client-mock-jest@^2.2.0',
     'strict-env-resolver@^0.8.2',
-    'aws-lambda-secret-fetcher@^0.8.1',
+    'aws-lambda-secret-fetcher@^0.9.1',
   ],
   releaseToNpm: true,
   npmTrustedPublishing: true,
