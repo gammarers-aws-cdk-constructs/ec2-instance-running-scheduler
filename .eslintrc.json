@@ -45,6 +45,7 @@
     "node_modules/",
     "*.generated.ts",
     "coverage",
+    "src/funcs/running-scheduler-function.ts",
     "!.projenrc.ts",
     "!projenrc/**/*.ts"
   ],
