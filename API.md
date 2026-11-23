@@ -4,6 +4,8 @@
 
 ### EC2InstanceRunningScheduler <a name="EC2InstanceRunningScheduler" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduler"></a>
 
+- *Implements:* constructs.IConstruct, constructs.IDependable
+
 Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
 
 Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
@@ -171,6 +173,8 @@ Failure detection alarms, when {@link EC2InstanceRunningSchedulerProps.failureDe
 
 
 ### EC2InstanceRunningScheduleStack <a name="EC2InstanceRunningScheduleStack" id="ec2-instance-running-scheduler.EC2InstanceRunningScheduleStack"></a>
+
+- *Implements:* constructs.IConstruct, constructs.IDependable, aws-cdk-lib.ITaggable
 
 CDK stack that deploys the EC2 instance running scheduler (EventBridge Scheduler + Durable Lambda).
 
@@ -1130,6 +1134,8 @@ Whether termination protection is enabled for this stack.
 
 
 ### RunningSchedulerFailureDetection <a name="RunningSchedulerFailureDetection" id="ec2-instance-running-scheduler.RunningSchedulerFailureDetection"></a>
+
+- *Implements:* constructs.IConstruct, constructs.IDependable
 
 CloudWatch alarms and log-based metrics for the EC2 instance running scheduler.
 
