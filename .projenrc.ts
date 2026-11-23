@@ -10,7 +10,7 @@ const project = new ProjenCdkConstructLibrary({
     'lambda-failure-detector@^0.2.1',
   ],
   devDeps: [
-    '@gammarers/projen-projects@^0.6.2',
+    '@gammarers/projen-projects@^0.8.1',
     '@aws/durable-execution-sdk-js@^1.1.7',
     '@aws-sdk/client-ec2@^3.1111.0',
     '@aws-sdk/client-eventbridge@^3.1111.0',
