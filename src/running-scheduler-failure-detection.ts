@@ -1,7 +1,7 @@
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import { type Alarm } from 'aws-cdk-lib/aws-cloudwatch';
+import { type IFunction } from 'aws-cdk-lib/aws-lambda';
+import { type ILogGroup } from 'aws-cdk-lib/aws-logs';
+import { type ITopic } from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import {
   isLambdaFailureDetectionEnabled,
@@ -51,9 +51,9 @@ interface CreateRunningSchedulerFailureDetectionProps {
   /** Failure detection options; alarms are created only when {@link RunningSchedulerFailureDetectionProps.enabled} is true. */
   readonly failureDetection?: RunningSchedulerFailureDetectionProps;
   /** Running scheduler Lambda to monitor. */
-  readonly runningScheduleFunction: lambda.IFunction;
+  readonly runningScheduleFunction: IFunction;
   /** Application log group for the running scheduler Lambda. */
-  readonly logGroup: logs.ILogGroup;
+  readonly logGroup: ILogGroup;
 }
 
 /**
@@ -73,11 +73,11 @@ export interface RunningSchedulerFailureDetectionProps extends LambdaFailureDete
  */
 export interface RunningSchedulerFailureDetectionResourcesProps {
   /** Existing SNS topic for alarm actions. When omitted, alarms have no SNS actions. */
-  readonly alarmTopic?: sns.ITopic;
+  readonly alarmTopic?: ITopic;
   /** Running scheduler Lambda whose platform metrics are alarmed. */
-  readonly runningScheduleFunction: lambda.IFunction;
+  readonly runningScheduleFunction: IFunction;
   /** Application log group used by the scheduler log filters. */
-  readonly logGroup: logs.ILogGroup;
+  readonly logGroup: ILogGroup;
 }
 
 /**
@@ -91,7 +91,7 @@ export interface RunningSchedulerFailureDetectionResourcesProps {
 const requireLogFilterAlarm = (
   detector: LambdaFailureDetector,
   id: string,
-): cloudwatch.Alarm => {
+): Alarm => {
   const alarm = detector.findLogFilterAlarm(id);
   if (!alarm) {
     throw new Error(`RunningSchedulerFailureDetection: missing log filter alarm for id "${id}".`);
@@ -115,11 +115,11 @@ const requireLogFilterAlarm = (
  */
 export class RunningSchedulerFailureDetection extends LambdaFailureDetector {
   /** Fires when instance stable-state waiting fails (`ResourceWaitFailed:*`). */
-  public readonly instanceStatusFailureAlarm: cloudwatch.Alarm;
+  public readonly instanceStatusFailureAlarm: Alarm;
   /** Fires when a configured Slack, SNS, or EventBridge notification send fails. */
-  public readonly notificationPostFailureAlarm: cloudwatch.Alarm;
+  public readonly notificationPostFailureAlarm: Alarm;
   /** Fires when the handler logs {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}. */
-  public readonly durableExecutionFailureAlarm: cloudwatch.Alarm;
+  public readonly durableExecutionFailureAlarm: Alarm;
 
   /**
    * @param scope - Parent construct.
