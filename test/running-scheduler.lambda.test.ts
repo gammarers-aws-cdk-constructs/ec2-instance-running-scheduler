@@ -215,7 +215,7 @@ describe('running scheduler slack checkpoint', () => {
     expect(names).toEqual([
       'get-target-resources',
       'post-slack-messages',
-      undefined,
+      'process-target-resources',
       'map-item-0',
       'resource-0',
       'resource-0-i-checkpoint123-wait-started-at',

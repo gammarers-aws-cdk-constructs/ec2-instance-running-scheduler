@@ -31,6 +31,7 @@ import {
   failedInstanceIds,
   formatMapFailure,
   hasMapItemFailure,
+  instanceIdFromTargetArn,
   notStartedMapCount,
 } from './core/running-scheduler-map-failure';
 import {
@@ -212,8 +213,7 @@ const processOneResource = async (
   resourceIndex: number,
   waitLimits: ResourceWaitLimits,
 ): Promise<{ resource: string; status: string; account: string; region: string; identifier: string }> => {
-  const parts = targetResource.split('/');
-  const identifier = parts[parts.length - 1] ?? 'unknown';
+  const identifier = instanceIdFromTargetArn(targetResource);
   const arnParts = targetResource.split(':');
   const account = arnParts[4] ?? '';
   const region = arnParts[3] ?? '';
@@ -282,7 +282,7 @@ const processOneResource = async (
         identifier,
         seconds: waitLimits.statusChangeWaitSeconds,
       });
-      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
+      await ctx.wait(`${stepPrefix}-wait-after-start-${loopCount}`, { seconds: waitLimits.statusChangeWaitSeconds });
       loopCount += 1;
       continue;
     }
@@ -297,7 +297,7 @@ const processOneResource = async (
         identifier,
         seconds: waitLimits.statusChangeWaitSeconds,
       });
-      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
+      await ctx.wait(`${stepPrefix}-wait-after-stop-${loopCount}`, { seconds: waitLimits.statusChangeWaitSeconds });
       loopCount += 1;
       continue;
     }
@@ -310,7 +310,7 @@ const processOneResource = async (
         mode,
         seconds: waitLimits.statusChangeWaitSeconds,
       });
-      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
+      await ctx.wait(`${stepPrefix}-wait-while-transitioning-${loopCount}`, { seconds: waitLimits.statusChangeWaitSeconds });
       loopCount += 1;
       continue;
     }
@@ -600,6 +600,7 @@ const runRunningScheduler = async (event: SchedulerEvent, ctx: DurableContext) =
   });
 
   const results = await ctx.map(
+    'process-target-resources',
     targetResources,
     async (mapCtx: DurableContext, targetResource: string, index: number): Promise<ProcessedInstance> => {
       return mapCtx.runInChildContext(`resource-${index}`, async (childCtx: DurableContext) => {

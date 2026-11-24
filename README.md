@@ -17,7 +17,7 @@ AWS CDK construct library that starts and stops tagged EC2 instances on a cron s
 - **Stable-state waiting** – After start/stop, waits and re-describes until `running` or `stopped`, with configurable wait limits (`resourceWait`).
 - **Configurable Lambda runtime** – Memory, invoke timeout, and bounded concurrency via `runtime`; Durable timeout and retention via `durable`.
 - **Optional notification** – Omit `notification` to log only. Otherwise choose one channel: Slack (parent message and thread replies), Amazon SNS (one plain-text message, including email subscriptions), or an EventBridge custom bus (one JSON event). A send failure is logged and does not fail the instance run.
-- **Optional failure detection** – Opt-in CloudWatch alarms via `failureDetection` (`enabled` / optional `alarmTopic`). Uses [`lambda-failure-detector`](https://www.npmjs.com/package/lambda-failure-detector) for platform Lambda `Errors` and `Throttles`, plus scheduler-specific log filters (`ResourceWaitFailed`, notification send failures, other handler `ERROR` logs). The construct never creates an SNS topic for alarms.
+- **Optional failure detection** – Opt-in CloudWatch alarms via `failureDetection` (`enabled` / optional `alarmTopic`). Uses [`lambda-failure-detector`](https://www.npmjs.com/package/lambda-failure-detector) for platform Lambda `Errors` and `Throttles`, plus scheduler-specific log filters (`ResourceWaitFailed`, notification send failures, and `RunningSchedulerExecutionFailed`). The construct never creates an SNS topic for alarms.
 - **Scheduling toggle** – Enable or disable both schedules without removing the stack (`enableScheduling`).
 
 ## How it works
@@ -25,7 +25,7 @@ AWS CDK construct library that starts and stops tagged EC2 instances on a cron s
 1. Tag EC2 instances in the same account and region with the `targetResource` tag key and one of the tag values **before** enabling schedules.
 2. EventBridge Scheduler invokes the Lambda alias on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`). A failed delivery is retried twice and only while the event is younger than 15 minutes, then sent to an SQS dead-letter queue. Those limits are not configurable via props today. The queue keeps messages for 14 days.
 3. The Durable handler discovers matching instances via the Resource Groups Tagging API. It reads every `tag:GetResources` page (at most 100 resources each), then starts or stops them in parallel (bounded by `runtime.maxConcurrency`). The log line `running-scheduler: get-target-resources done` includes the instance count and the page count.
-4. For each instance it waits (`resourceWait`) until the desired stable state, or fails with a `ResourceWaitFailed:*` error. Defaults are 90 loops, 1800 seconds, and 20 seconds between describes. Lambda invoke `timeout` defaults to 15 minutes. Durable `executionTimeout` defaults to 2 hours and `retentionPeriod` to 1 day.
+4. For each instance it waits (`resourceWait`) until the desired stable state, or the run fails. The thrown text starts with `MapFailed:` and includes the child `ResourceWaitFailed:*` message. Defaults are 90 loops, 1800 seconds, and 20 seconds between describes. Lambda invoke `timeout` defaults to 15 minutes. Durable `executionTimeout` defaults to 2 hours and `retentionPeriod` to 1 day.
 5. When no instance matches on any page, the run returns `TargetResourcesNotFound` and sends nothing.
 6. When instances were processed, the selected channel reports the result:
    - **Omitted `notification`** – the same plain text is written to the function log. No Slack, SNS, or EventBridge permission is added.
@@ -114,20 +114,19 @@ Deploy checklist:
 Use `EC2InstanceRunningScheduler` when the scheduler shares a stack with other resources. Put the SNS topic in that stack and subscribe the email protocol yourself. The construct grants `sns:Publish` on that topic and does not create the subscription. The message is plain text: the subject is `😆 Starts the scheduled EC2 Instance.` or `🥱 Stops the scheduled EC2 Instance.`, and the body is one block per instance (emoji, account, region, identifier, status).
 
 ```typescript
-import * as cdk from 'aws-cdk-lib';
-import { TimeZone } from 'aws-cdk-lib';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import { App, Stack, TimeZone } from 'aws-cdk-lib';
+import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EC2InstanceRunningScheduler } from 'ec2-instance-running-scheduler';
 
-const app = new cdk.App();
-const stack = new cdk.Stack(app, 'MyStack', {
+const app = new App();
+const stack = new Stack(app, 'MyStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
 });
 
-const mailTopic = new sns.Topic(stack, 'SchedulerMail');
+const mailTopic = new Topic(stack, 'SchedulerMail');
 
 new EC2InstanceRunningScheduler(stack, 'EC2InstanceRunningScheduler', {
   targetResource: {
@@ -250,7 +249,7 @@ When enabled:
 | Lambda throttles | `AWS/Lambda` `Throttles` metric (platform) |
 | Instance status failure | Log filter: `ResourceWaitFailed` |
 | Notification post failure | Log filter: `running-scheduler: notification post failed` |
-| Durable execution failure | Other handler `ERROR` logs (excluding the above) |
+| Durable execution failure | Log filter: `RunningSchedulerExecutionFailed` |
 
 Custom metrics use the `EC2InstanceRunningScheduler` namespace. Access created alarms via `EC2InstanceRunningScheduler.failureDetection` when enabled.
 
