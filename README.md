@@ -23,7 +23,7 @@ AWS CDK construct library that starts and stops tagged EC2 instances on a cron s
 ## How it works
 
 1. Tag EC2 instances in the same account and region with the `targetResource` tag key and one of the tag values **before** enabling schedules.
-2. EventBridge Scheduler invokes the Lambda alias on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`). A failed delivery is retried twice and only while the event is younger than 15 minutes, then sent to an SQS dead-letter queue. Those limits are not configurable via props today. The queue keeps messages for 14 days.
+2. EventBridge Scheduler invokes the Lambda alias `live` on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`). A failed delivery is retried twice and only while the event is younger than 15 minutes, then sent to an SQS dead-letter queue. Those limits are not configurable via props today. The queue keeps messages for 14 days.
 3. The Durable handler discovers matching instances via the Resource Groups Tagging API. It reads every `tag:GetResources` page (at most 100 resources each), then starts or stops them in parallel (bounded by `runtime.maxConcurrency`). The log line `running-scheduler: get-target-resources done` includes the instance count and the page count.
 4. For each instance it waits (`resourceWait`) until the desired stable state, or the run fails. The thrown text starts with `MapFailed:` and includes the child `ResourceWaitFailed:*` message. Defaults are 90 loops, 1800 seconds, and 20 seconds between describes. Lambda invoke `timeout` defaults to 15 minutes. Durable `executionTimeout` defaults to 2 hours and `retentionPeriod` to 1 day.
 5. When no instance matches on any page, the run returns `TargetResourcesNotFound` and sends nothing.
@@ -214,7 +214,7 @@ Written to `PROCESS_RESOURCE_MAX_LOOP_COUNT`, `PROCESS_RESOURCE_MAX_ELAPSED_SECO
 - `maxElapsedSeconds` – Maximum wall-clock seconds spent waiting for one instance to stabilize (default: **1800**, 30 minutes). Must be a positive integer when set.
 - `statusChangeWaitSeconds` – Seconds between describe iterations after start/stop or while transitioning (default: **20**). Must be a positive integer when set.
 
-When a limit is exceeded during waiting, the handler throws an error with prefix `ResourceWaitFailed:` (`MaxLoopCountExceeded`, `MaxElapsedTimeExceeded`, or `UnexpectedInstanceState` for unknown EC2 states).
+When a limit is exceeded during waiting, that instance fails with `ResourceWaitFailed:` (`MaxLoopCountExceeded`, `MaxElapsedTimeExceeded`, or `UnexpectedInstanceState` for unknown EC2 states). The run then throws `MapFailed:` and includes that message.
 
 ### RunningSchedulerRuntimeProps
 
@@ -270,6 +270,7 @@ See [API.md](./API.md).
 - SNS email is the plain-text `Message`. The `Subject` is the same parent line Slack uses. Emoji are included. HTML is not sent.
 - A notification send failure does not fail the start/stop run. A Slack secret with the wrong JSON shape does.
 - Start/stop IAM allows `ec2:StartInstances` and `ec2:StopInstances` only on instances in this account and region whose tag matches `targetResource`. Describe and tag lookup remain `Resource: *` because those APIs do not support resource-level permissions.
+- Durable `wait` and `map` names are part of the execution checkpoint. A run that resumes after those names change fails replay.
 
 ## Troubleshooting
 
