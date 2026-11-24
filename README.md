@@ -23,7 +23,7 @@ AWS CDK construct library that starts and stops tagged EC2 instances on a cron s
 ## How it works
 
 1. Tag EC2 instances in the same account and region with the `targetResource` tag key and one of the tag values **before** enabling schedules.
-2. EventBridge Scheduler invokes the Lambda alias on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`).
+2. EventBridge Scheduler invokes the Lambda alias on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`). A failed delivery is retried twice and only while the event is younger than 15 minutes, then sent to an SQS dead-letter queue. Those limits are not configurable via props today. The queue keeps messages for 14 days.
 3. The Durable handler discovers matching instances via the Resource Groups Tagging API, then starts or stops them in parallel (bounded by `runtime.maxConcurrency`).
 4. For each instance it waits (`resourceWait`) until the desired stable state, or fails with a `ResourceWaitFailed:*` error. Defaults are 90 loops, 1800 seconds, and 20 seconds between describes. Lambda invoke `timeout` defaults to 15 minutes. Durable `executionTimeout` defaults to 2 hours and `retentionPeriod` to 1 day.
 5. When no instance matches, the run returns `TargetResourcesNotFound` and sends nothing.
@@ -262,7 +262,7 @@ See [API.md](./API.md).
 
 - **Node.js** ≥ 20.0.0 (for developing or synthesizing CDK apps that depend on this package).
 - **aws-cdk-lib** ^2.232.0, **constructs** ^10.5.1, and **lambda-failure-detector** ^0.2.1 (peer dependencies).
-- **AWS** – EventBridge Scheduler; Lambda with Durable Execution (Node.js **24.x** runtime in the construct); EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`). Slack also needs Secrets Manager and the Parameters and Secrets Lambda Extension. SNS needs `sns:Publish` on the topic you pass. EventBridge needs `events:PutEvents` on the bus you pass. The construct adds those permissions for the channel you select.
+- **AWS** – EventBridge Scheduler; Lambda with Durable Execution (Node.js **24.x** runtime in the construct); EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`); an SQS dead-letter queue for schedule deliveries that exhaust the retry limit. Slack also needs Secrets Manager and the Parameters and Secrets Lambda Extension. SNS needs `sns:Publish` on the topic you pass. EventBridge needs `events:PutEvents` on the bus you pass. The construct adds those permissions for the channel you select, and it creates the dead-letter queue.
 
 ## Notes
 
@@ -277,6 +277,7 @@ See [API.md](./API.md).
 - **No Slack message, email, or event** – The function log group (default retention three months) is the place to look. After a successful create, stack deletion keeps that group (`RetainExceptOnCreate`). Omit `notification` and the run only writes `running-scheduler: notification` there. If the tag matches nothing, the run returns `TargetResourcesNotFound` and does not send.
 - **Slack fails before any instance starts** – The secret must be JSON with non-empty `token` and `channel`. That configuration error fails the run. A later `chat.postMessage` error is logged as `running-scheduler: notification post failed` and does not fail the run.
 - **SNS topic has no email** – Add an email subscription on the topic you passed. The scheduler only publishes.
+- **A start or stop delivery failed** – Scheduler retries that delivery twice, and only until the event is 15 minutes old. The event then sits in the SQS dead-letter queue (14-day retention). After a successful create, stack deletion keeps the queue (`RetainExceptOnCreate`). A failure after the Slack parent post can post that parent again on each retry, at most three deliveries.
 
 ## License
 

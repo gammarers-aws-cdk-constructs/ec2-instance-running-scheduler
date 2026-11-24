@@ -7,6 +7,7 @@ import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { RunningSchedulerFunction } from './funcs/running-scheduler-function';
 import {
@@ -263,6 +264,16 @@ const DEFAULT_LAMBDA_MEMORY_SIZE = 512;
 const DEFAULT_LAMBDA_TIMEOUT = Duration.minutes(15);
 const DEFAULT_DURABLE_EXECUTION_TIMEOUT = Duration.hours(2);
 const DEFAULT_DURABLE_RETENTION_PERIOD = Duration.days(1);
+/**
+ * Extra Scheduler deliveries after the first attempt.
+ *
+ * Exhausted events are sent to the schedule dead-letter queue.
+ */
+const SCHEDULE_TARGET_RETRY_ATTEMPTS = 2;
+/** Scheduler stops retrying once the original event is this old. */
+const SCHEDULE_TARGET_MAX_EVENT_AGE = Duration.minutes(15);
+/** How long exhausted schedule events stay in the dead-letter queue. */
+const SCHEDULE_DEAD_LETTER_RETENTION = Duration.days(14);
 
 /**
  * Returns `value` when set, otherwise `defaultValue`.
@@ -345,6 +356,38 @@ const assertTargetResourceForIam = (targetResource: TargetResource): void => {
 };
 
 /**
+ * Schedule target for one start or stop cron.
+ *
+ * Retry is set here because the schedule invokes alias `live`. `retryAttempts` on the function
+ * would only configure asynchronous `EventInvokeConfig` for `$LATEST`.
+ *
+ * @param alias - Published alias the schedule invokes.
+ * @param deadLetterQueue - Queue that receives events after the retry limit.
+ * @param targetResource - Tag key and values copied into the schedule input.
+ * @param mode - `Start` or `Stop`.
+ * @returns Lambda target with a short retry policy and the shared dead-letter queue.
+ */
+const scheduleLambdaTarget = (
+  alias: lambda.IFunction,
+  deadLetterQueue: Queue,
+  targetResource: TargetResource,
+  mode: 'Start' | 'Stop',
+): targets.LambdaInvoke => {
+  return new targets.LambdaInvoke(alias, {
+    retryAttempts: SCHEDULE_TARGET_RETRY_ATTEMPTS,
+    maxEventAge: SCHEDULE_TARGET_MAX_EVENT_AGE,
+    deadLetterQueue,
+    input: scheduler.ScheduleTargetInput.fromObject({
+      Params: {
+        TagKey: targetResource.tagKey,
+        TagValues: targetResource.tagValues,
+        Mode: mode,
+      },
+    }),
+  });
+};
+
+/**
  * IAM statement that allows start/stop only on EC2 instances in this account and region
  * whose tags match {@link TargetResource}.
  *
@@ -387,8 +430,9 @@ const taggedInstanceStartStopStatement = (
  * Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
  *
  * Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
- * the Resource Groups Tagging API and EC2 APIs. Notification uses {@link EC2InstanceRunningSchedulerProps.notification}
- * (logs only when omitted).
+ * the Resource Groups Tagging API and EC2 APIs. A failed delivery is retried twice and only for
+ * 15 minutes, then sent to an SQS dead-letter queue created by this construct. Notification uses
+ * {@link EC2InstanceRunningSchedulerProps.notification} (logs only when omitted).
  *
  * Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
  * and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
@@ -404,7 +448,8 @@ export class EC2InstanceRunningScheduler extends Construct {
 
   /**
    * Defines IAM, logging, optional failure detection alarms, two cron schedules (start/stop),
-   * and the bundled running-scheduler Lambda (Node.js, Durable Execution).
+   * a dead-letter queue for exhausted schedule deliveries, and the bundled running-scheduler Lambda
+   * (Node.js, Durable Execution).
    *
    * @param scope - Parent construct.
    * @param id - Construct id.
@@ -461,7 +506,6 @@ export class EC2InstanceRunningScheduler extends Construct {
       architecture: lambda.Architecture.ARM_64,
       timeout: props.runtime?.timeout ?? DEFAULT_LAMBDA_TIMEOUT,
       memorySize,
-      retryAttempts: 2,
       durableConfig: {
         executionTimeout: props.durable?.executionTimeout ?? DEFAULT_DURABLE_EXECUTION_TIMEOUT,
         retentionPeriod: props.durable?.retentionPeriod ?? DEFAULT_DURABLE_RETENTION_PERIOD,
@@ -535,6 +579,13 @@ export class EC2InstanceRunningScheduler extends Construct {
     // See: https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started-iac.html
     const runningScheduleFunctionAlias = runningScheduleFunction.addAlias('live');
 
+    // One queue for both crons. The schedule input still distinguishes Start from Stop.
+    const scheduleDeadLetterQueue = new Queue(this, 'ScheduleDeadLetterQueue', {
+      retentionPeriod: SCHEDULE_DEAD_LETTER_RETENTION,
+      encryption: QueueEncryption.SQS_MANAGED,
+      removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
+    });
+
     // Schedules stay enabled unless the caller sets enableScheduling to false.
     const scheduleEnabled = props.enableScheduling !== false;
 
@@ -548,15 +599,12 @@ export class EC2InstanceRunningScheduler extends Construct {
         weekDay: props.startSchedule?.week ?? 'MON-FRI',
         timeZone: props.startSchedule?.timezone ?? TimeZone.ETC_UTC,
       }),
-      target: new targets.LambdaInvoke(runningScheduleFunctionAlias, {
-        input: scheduler.ScheduleTargetInput.fromObject({
-          Params: {
-            TagKey: props.targetResource.tagKey,
-            TagValues: props.targetResource.tagValues,
-            Mode: 'Start',
-          },
-        }),
-      }),
+      target: scheduleLambdaTarget(
+        runningScheduleFunctionAlias,
+        scheduleDeadLetterQueue,
+        props.targetResource,
+        'Start',
+      ),
     });
 
     new scheduler.Schedule(this, 'RunningStopSchedule', {
@@ -568,15 +616,12 @@ export class EC2InstanceRunningScheduler extends Construct {
         weekDay: props.stopSchedule?.week ?? 'MON-FRI',
         timeZone: props.stopSchedule?.timezone ?? TimeZone.ETC_UTC,
       }),
-      target: new targets.LambdaInvoke(runningScheduleFunctionAlias, {
-        input: scheduler.ScheduleTargetInput.fromObject({
-          Params: {
-            TagKey: props.targetResource.tagKey,
-            TagValues: props.targetResource.tagValues,
-            Mode: 'Stop',
-          },
-        }),
-      }),
+      target: scheduleLambdaTarget(
+        runningScheduleFunctionAlias,
+        scheduleDeadLetterQueue,
+        props.targetResource,
+        'Stop',
+      ),
     });
   }
 }

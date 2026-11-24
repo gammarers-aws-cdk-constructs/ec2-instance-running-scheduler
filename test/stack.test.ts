@@ -14,23 +14,90 @@ const baseProps = {
   },
 };
 
-/**
- * Function, alias, and both schedules that every running-scheduler stack wires.
- */
-const expectDurableSchedulerWiring = (template: Template): void => {
-  template.resourceCountIs('AWS::Lambda::Function', 1);
-  template.resourceCountIs('AWS::Lambda::Alias', 1);
-  template.resourceCountIs('AWS::Scheduler::Schedule', 2);
-};
+interface ScheduleDeadLetterArn {
+  readonly 'Fn::GetAtt': readonly [string, string];
+}
 
 interface SchedulerScheduleResource {
   readonly Properties?: {
     readonly State?: string;
+    readonly Target?: {
+      readonly RetryPolicy?: {
+        readonly MaximumEventAgeInSeconds?: number;
+        readonly MaximumRetryAttempts?: number;
+      };
+      readonly DeadLetterConfig?: {
+        readonly Arn?: ScheduleDeadLetterArn;
+      };
+    };
   };
 }
 
 const isSchedulerScheduleResource = (value: unknown): value is SchedulerScheduleResource => {
   return typeof value === 'object' && value !== null;
+};
+
+/**
+ * Both schedules retry twice within 15 minutes, then send the event to one retained queue.
+ * Asynchronous retry on `$LATEST` is not configured.
+ */
+const expectScheduleRetryAndDeadLetter = (template: Template): void => {
+  const maxEventAgeSeconds = Duration.minutes(15).toSeconds();
+  const retentionSeconds = Duration.days(14).toSeconds();
+
+  template.resourceCountIs('AWS::Lambda::EventInvokeConfig', 0);
+  template.resourceCountIs('AWS::SQS::Queue', 1);
+  template.hasResource('AWS::SQS::Queue', {
+    DeletionPolicy: 'RetainExceptOnCreate',
+    UpdateReplacePolicy: 'Retain',
+    Properties: Match.objectLike({
+      MessageRetentionPeriod: retentionSeconds,
+      SqsManagedSseEnabled: true,
+    }),
+  });
+
+  const queueLogicalId = Object.keys(template.findResources('AWS::SQS::Queue'))[0];
+  if (queueLogicalId === undefined) {
+    throw new Error('Schedule dead-letter queue is missing');
+  }
+  const deadLetterArn: ScheduleDeadLetterArn = { 'Fn::GetAtt': [queueLogicalId, 'Arn'] };
+
+  const targets = Object.values(template.findResources('AWS::Scheduler::Schedule')).flatMap((resource) => {
+    if (!isSchedulerScheduleResource(resource)) {
+      return [];
+    }
+    return [resource.Properties?.Target];
+  });
+  expect(targets).toHaveLength(2);
+  for (const target of targets) {
+    expect(target?.RetryPolicy).toEqual({
+      MaximumEventAgeInSeconds: maxEventAgeSeconds,
+      MaximumRetryAttempts: 2,
+    });
+    expect(target?.DeadLetterConfig?.Arn).toEqual(deadLetterArn);
+  }
+
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: {
+      Statement: Match.arrayWith([
+        Match.objectLike({
+          Action: 'sqs:SendMessage',
+          Effect: 'Allow',
+          Resource: deadLetterArn,
+        }),
+      ]),
+    },
+  });
+};
+
+/**
+ * Function, alias, both schedules, and the short Scheduler retry plus dead-letter queue.
+ */
+const expectDurableSchedulerWiring = (template: Template): void => {
+  template.resourceCountIs('AWS::Lambda::Function', 1);
+  template.resourceCountIs('AWS::Lambda::Alias', 1);
+  template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+  expectScheduleRetryAndDeadLetter(template);
 };
 
 describe('EC2InstanceRunningScheduleStack', () => {

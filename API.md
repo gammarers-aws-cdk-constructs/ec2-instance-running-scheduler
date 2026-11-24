@@ -9,8 +9,9 @@
 Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
 
 Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
-the Resource Groups Tagging API and EC2 APIs. Notification uses {@link EC2InstanceRunningSchedulerProps.notification}
-(logs only when omitted).
+the Resource Groups Tagging API and EC2 APIs. A failed delivery is retried twice and only for
+15 minutes, then sent to an SQS dead-letter queue created by this construct. Notification uses
+{@link EC2InstanceRunningSchedulerProps.notification} (logs only when omitted).
 
 Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
 and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
