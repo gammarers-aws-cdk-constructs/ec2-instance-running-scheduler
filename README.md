@@ -29,7 +29,7 @@ AWS CDK construct library that starts and stops tagged EC2 instances on a cron s
 5. When no instance matches, the run returns `TargetResourcesNotFound` and sends nothing.
 6. When instances were processed, the selected channel reports the result:
    - **Omitted `notification`** – the same plain text is written to the function log. No Slack, SNS, or EventBridge permission is added.
-   - **Slack** – a parent message, then one thread reply per instance. The secret is read with the Parameters and Secrets Lambda Extension.
+   - **Slack** – a parent message, then one thread reply per instance. The secret is read with the Parameters and Secrets Lambda Extension inside each post. Durable execution history stores the thread timestamp, not the token or channel.
    - **SNS** – one plain-text publish after every instance finishes. Email subscriptions show that text; HTML is not used.
    - **EventBridge** – one `PutEvents` call to the bus you pass. This construct does not create the bus or a rule.
 7. A Slack, SNS, or EventBridge send failure is logged as `running-scheduler: notification post failed` and the run still completes. A Slack secret that is not JSON with `token` and `channel` throws.

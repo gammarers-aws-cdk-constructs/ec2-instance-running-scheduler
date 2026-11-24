@@ -437,6 +437,7 @@
             "@aws-sdk/client-eventbridge",
             "@aws-sdk/client-resource-groups-tagging-api",
             "@aws-sdk/client-sns",
+            "@aws/durable-execution-sdk-js-testing",
             "@aws/durable-execution-sdk-js",
             "@gammarers/projen-projects",
             "@slack/web-api",
