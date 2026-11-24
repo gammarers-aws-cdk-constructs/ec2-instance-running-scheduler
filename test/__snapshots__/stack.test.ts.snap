@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default schedule) Should match snapshot: default 1`] = `
+exports[`EC2InstanceRunningScheduleStack matches the default snapshot: default 1`] = `
 {
   "Parameters": {
     "BootstrapVersion": {
@@ -391,7 +391,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
 }
 `;
 
-exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Should match snapshot: disable 1`] = `
+exports[`EC2InstanceRunningScheduleStack matches the disable snapshot: disable 1`] = `
 {
   "Parameters": {
     "BootstrapVersion": {
@@ -782,7 +782,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
 }
 `;
 
-exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone) Should match snapshot: specific 1`] = `
+exports[`EC2InstanceRunningScheduleStack matches the specific snapshot: specific 1`] = `
 {
   "Parameters": {
     "BootstrapVersion": {
