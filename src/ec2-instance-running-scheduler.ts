@@ -289,7 +289,7 @@ const resolvePositiveInteger = (name: string, value: number | undefined, default
     return defaultValue;
   }
   if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)})`);
+    throw new Error(`${name} must be a positive integer`);
   }
   return value;
 };

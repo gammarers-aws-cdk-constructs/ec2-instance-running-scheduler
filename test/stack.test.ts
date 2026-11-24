@@ -415,7 +415,7 @@ describe('EC2InstanceRunningScheduler runtime durable logGroup', () => {
           maxConcurrency: 0,
         },
       });
-    }).toThrow(/runtime.maxConcurrency/);
+    }).toThrow('runtime.maxConcurrency must be a positive integer');
   });
 
   it('throws when statusChangeWaitSeconds is not a positive integer', () => {
@@ -429,7 +429,7 @@ describe('EC2InstanceRunningScheduler runtime durable logGroup', () => {
           statusChangeWaitSeconds: -1,
         },
       });
-    }).toThrow(/resourceWait.statusChangeWaitSeconds/);
+    }).toThrow('resourceWait.statusChangeWaitSeconds must be a positive integer');
   });
 });
 
