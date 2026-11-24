@@ -24,9 +24,9 @@ AWS CDK construct library that starts and stops tagged EC2 instances on a cron s
 
 1. Tag EC2 instances in the same account and region with the `targetResource` tag key and one of the tag values **before** enabling schedules.
 2. EventBridge Scheduler invokes the Lambda alias on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`). A failed delivery is retried twice and only while the event is younger than 15 minutes, then sent to an SQS dead-letter queue. Those limits are not configurable via props today. The queue keeps messages for 14 days.
-3. The Durable handler discovers matching instances via the Resource Groups Tagging API, then starts or stops them in parallel (bounded by `runtime.maxConcurrency`).
+3. The Durable handler discovers matching instances via the Resource Groups Tagging API. It reads every `tag:GetResources` page (at most 100 resources each), then starts or stops them in parallel (bounded by `runtime.maxConcurrency`). The log line `running-scheduler: get-target-resources done` includes the instance count and the page count.
 4. For each instance it waits (`resourceWait`) until the desired stable state, or fails with a `ResourceWaitFailed:*` error. Defaults are 90 loops, 1800 seconds, and 20 seconds between describes. Lambda invoke `timeout` defaults to 15 minutes. Durable `executionTimeout` defaults to 2 hours and `retentionPeriod` to 1 day.
-5. When no instance matches, the run returns `TargetResourcesNotFound` and sends nothing.
+5. When no instance matches on any page, the run returns `TargetResourcesNotFound` and sends nothing.
 6. When instances were processed, the selected channel reports the result:
    - **Omitted `notification`** – the same plain text is written to the function log. No Slack, SNS, or EventBridge permission is added.
    - **Slack** – a parent message, then one thread reply per instance. The secret is read with the Parameters and Secrets Lambda Extension inside each post. Durable execution history stores the thread timestamp, not the token or channel.
@@ -275,6 +275,7 @@ See [API.md](./API.md).
 ## Troubleshooting
 
 - **No Slack message, email, or event** – The function log group (default retention three months) is the place to look. After a successful create, stack deletion keeps that group (`RetainExceptOnCreate`). Omit `notification` and the run only writes `running-scheduler: notification` there. If the tag matches nothing, the run returns `TargetResourcesNotFound` and does not send.
+- **Fewer instances ran than expected** – `running-scheduler: get-target-resources done` logs `count` and `pageCount`. The handler follows `PaginationToken` until it is absent. `TargetResourcesNotFound` means every page had zero instance ARNs. Instances in another account or region are not listed.
 - **Slack fails before any instance starts** – The secret must be JSON with non-empty `token` and `channel`. That configuration error fails the run. A later `chat.postMessage` error is logged as `running-scheduler: notification post failed` and does not fail the run.
 - **SNS topic has no email** – Add an email subscription on the topic you passed. The scheduler only publishes.
 - **A start or stop delivery failed** – Scheduler retries that delivery twice, and only until the event is 15 minutes old. The event then sits in the SQS dead-letter queue (14-day retention). After a successful create, stack deletion keeps the queue (`RetainExceptOnCreate`). A failure after the Slack parent post can post that parent again on each retry, at most three deliveries.

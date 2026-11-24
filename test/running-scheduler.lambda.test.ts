@@ -453,6 +453,32 @@ describe('running scheduler instance processing', () => {
     expect(execution.getResult()).toEqual({ status: 'TargetResourcesNotFound' });
   });
 
+  it('processes instances from every tag page', async () => {
+    const secondArn = 'arn:aws:ec2:ap-northeast-1:123456789012:instance/i-page2';
+    taggingMock.reset();
+    taggingMock.on(GetResourcesCommand)
+      .resolvesOnce({
+        PaginationToken: 'page-2',
+        ResourceTagMappingList: [{ ResourceARN: INSTANCE_ARN }],
+      })
+      .resolves({
+        ResourceTagMappingList: [{ ResourceARN: secondArn }],
+      });
+
+    const execution = await runner.run({ payload: startEvent() });
+
+    expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+    expect(taggingMock).toHaveReceivedCommandTimes(GetResourcesCommand, 2);
+    expect(taggingMock).toHaveReceivedNthCommandWith(2, GetResourcesCommand, { PaginationToken: 'page-2' });
+    expect(execution.getResult()).toEqual(expect.objectContaining({
+      processed: 2,
+      results: [
+        expect.objectContaining({ identifier: INSTANCE_ID }),
+        expect.objectContaining({ identifier: 'i-page2' }),
+      ],
+    }));
+  });
+
   it.each([
     ['omitted', undefined],
     ['missing Params', {}],

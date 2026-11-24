@@ -15,7 +15,7 @@ import {
   StopInstancesCommand,
 } from '@aws-sdk/client-ec2';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
+import { ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { WebClient } from '@slack/web-api';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
@@ -34,6 +34,7 @@ import {
   isTransitioningState,
   type ResourceWaitLimits,
 } from './core/running-scheduler-predicates';
+import { collectTaggedInstanceArns } from './core/running-scheduler-tag-pages';
 import {
   parseMaxConcurrencyFromEnv,
   parseNotificationFromEnv,
@@ -541,7 +542,7 @@ const publishSummary = async (
 /**
  * Durable Lambda entry point for the EC2 running scheduler.
  *
- * Resolves instances via Resource Groups Tagging API, runs {@link processOneResource} for each ARN
+ * Resolves instances via every page of `tag:GetResources`, runs {@link processOneResource} for each ARN
  * in parallel (bounded concurrency), then reports the run on the configured notification channel.
  * Logs are the default. Slack posts a parent message and per-instance thread replies. SNS publishes
  * one plain-text message after processing. EventBridge publishes one event to the configured bus.
@@ -558,7 +559,7 @@ const publishSummary = async (
  * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
  * @param ctx - Root durable execution context.
  * @returns
- * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter. Nothing is sent.
+ * - `{ status: 'TargetResourcesNotFound' }` when every tag page has zero instance ARNs. Nothing is sent.
  * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
  * @throws {Error} If `Params` is invalid, the Slack secret is incomplete or not JSON with `token` and `channel`,
  *   or instance processing fails (including `ResourceWaitFailed:*` errors).
@@ -590,17 +591,12 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
 
   const targetResources = await ctx.step('get-target-resources', async () => {
     const client = new ResourceGroupsTaggingAPIClient(awsSdkClientConfig());
-    const result = await client.send(
-      new GetResourcesCommand({
-        ResourceTypeFilters: ['ec2:instance'],
-        TagFilters: [{ Key: params.TagKey, Values: params.TagValues }],
-      }),
-    );
-    const arns = (result.ResourceTagMappingList ?? [])
-      .map((mapping: { ResourceARN?: string }) => mapping.ResourceARN)
-      .filter((arn: string | undefined): arn is string => arn != null);
-    ctx.logger.info('running-scheduler: get-target-resources done', { count: arns.length });
-    return arns;
+    const collected = await collectTaggedInstanceArns(client, params.TagKey, params.TagValues);
+    ctx.logger.info('running-scheduler: get-target-resources done', {
+      count: collected.arns.length,
+      pageCount: collected.pageCount,
+    });
+    return [...collected.arns];
   });
 
   if (targetResources.length === 0) {

@@ -2,6 +2,7 @@ import {
   formatResourceWaitFailure,
   getWaitAbortReason,
   isDesiredStableState,
+  isLastGetResourcesPage,
   isTransitioningState,
 } from '../src/funcs/core/running-scheduler-predicates';
 
@@ -45,6 +46,16 @@ describe('getWaitAbortReason', () => {
       expect(getWaitAbortReason(loopCount, startedAt, now, limits)).toBe(expected);
     },
   );
+});
+
+describe('isLastGetResourcesPage', () => {
+  it.each([
+    [undefined, true],
+    ['', true],
+    ['next-page', false],
+  ] as const)('token %s -> %s', (paginationToken, expected) => {
+    expect(isLastGetResourcesPage(paginationToken)).toBe(expected);
+  });
 });
 
 describe('formatResourceWaitFailure', () => {

@@ -23,7 +23,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "28001f779914ff31c5516b4230cc71d8d15b2424fb28e70a8803f02352344e0b.zip",
+          "S3Key": "4bebb2b9a68e9c3f99d1f25f2c0a3d77c4d3e7ac266c50b610007be74fa1d0d6.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -68,7 +68,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a4938c3d271166268846d3d6d1550bd3",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012c5385295c864d8f2ade89b3a5e9fe5b",
             "Version",
           ],
         },
@@ -76,7 +76,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a4938c3d271166268846d3d6d1550bd3": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012c5385295c864d8f2ade89b3a5e9fe5b": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -414,7 +414,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "28001f779914ff31c5516b4230cc71d8d15b2424fb28e70a8803f02352344e0b.zip",
+          "S3Key": "4bebb2b9a68e9c3f99d1f25f2c0a3d77c4d3e7ac266c50b610007be74fa1d0d6.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -459,7 +459,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a4938c3d271166268846d3d6d1550bd3",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012c5385295c864d8f2ade89b3a5e9fe5b",
             "Version",
           ],
         },
@@ -467,7 +467,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a4938c3d271166268846d3d6d1550bd3": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012c5385295c864d8f2ade89b3a5e9fe5b": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -805,7 +805,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "28001f779914ff31c5516b4230cc71d8d15b2424fb28e70a8803f02352344e0b.zip",
+          "S3Key": "4bebb2b9a68e9c3f99d1f25f2c0a3d77c4d3e7ac266c50b610007be74fa1d0d6.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -850,7 +850,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a4938c3d271166268846d3d6d1550bd3",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012c5385295c864d8f2ade89b3a5e9fe5b",
             "Version",
           ],
         },
@@ -858,7 +858,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601a4938c3d271166268846d3d6d1550bd3": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966012c5385295c864d8f2ade89b3a5e9fe5b": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },

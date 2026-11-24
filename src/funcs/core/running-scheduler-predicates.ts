@@ -122,3 +122,14 @@ export const formatResourceWaitFailure = (
   }
   return `ResourceWaitFailed:UnexpectedInstanceState: ${common}`;
 };
+
+/**
+ * Whether `tag:GetResources` has returned its last page.
+ *
+ * The API omits `PaginationToken` on the last page. An empty token is treated the same way.
+ *
+ * @param paginationToken - `PaginationToken` from the current `GetResources` response.
+ * @returns `true` when the caller should stop reading pages.
+ */
+export const isLastGetResourcesPage = (paginationToken: string | undefined): boolean =>
+  paginationToken === undefined || paginationToken.length === 0;
