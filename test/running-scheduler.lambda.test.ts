@@ -26,6 +26,7 @@ import {
   PROCESS_RESOURCE_MAX_LOOP_COUNT_ENV,
   PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS_ENV,
   PROCESS_RESOURCES_MAX_CONCURRENCY_ENV,
+  RUNNING_SCHEDULER_EXECUTION_FAILED_LOG,
   SLACK_SECRET_NAME_ENV,
 } from '../src/settings/consts';
 
@@ -141,6 +142,7 @@ const describeStates = (...states: readonly InstanceStateName[]): void => {
 };
 
 let runner: LocalDurableTestRunner;
+let consoleError: jest.SpiedFunction<typeof console.error>;
 
 beforeAll(async () => {
   await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });
@@ -152,6 +154,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   runner.reset();
   ec2Mock.reset();
   taggingMock.reset();
@@ -170,6 +173,10 @@ beforeEach(() => {
   });
   snsMock.on(PublishCommand).resolves({});
   eventsMock.on(PutEventsCommand).resolves({ FailedEntryCount: 0 });
+});
+
+afterEach(() => {
+  consoleError.mockRestore();
 });
 
 describe('running scheduler slack checkpoint', () => {
@@ -201,6 +208,7 @@ describe('running scheduler slack checkpoint', () => {
     expect(history).toContain(THREAD_TS);
     expect(history).not.toContain(SLACK_TOKEN);
     expect(history).not.toContain(SLACK_CHANNEL);
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(RUNNING_SCHEDULER_EXECUTION_FAILED_LOG);
     expect(runner.getOperation('post-slack-messages').getStepDetails()?.result).toBe(THREAD_TS);
     const names = execution.getOperations().map((operation) => operation.getName());
     expect(names).not.toContain('fetch-slack-secret');
@@ -248,6 +256,13 @@ describe('running scheduler slack checkpoint', () => {
 
     expect(execution.getStatus()).toBe(ExecutionStatus.FAILED);
     expect(execution.getError().errorMessage).toBe('Slack secret must contain token and channel.');
+    expect(consoleError).toHaveBeenCalledWith(RUNNING_SCHEDULER_EXECUTION_FAILED_LOG, {
+      identifier: undefined,
+      errorMessage: 'Slack secret must contain token and channel.',
+    });
+    const executionLog = JSON.stringify(consoleError.mock.calls);
+    expect(executionLog).not.toContain(SLACK_TOKEN);
+    expect(executionLog).not.toContain(SLACK_CHANNEL);
     expect(ec2Mock).not.toHaveReceivedCommand(DescribeInstancesCommand);
     expect(ec2Mock).not.toHaveReceivedCommand(StartInstancesCommand);
     const history = historyText(execution);

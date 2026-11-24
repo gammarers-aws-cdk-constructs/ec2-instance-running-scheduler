@@ -6,6 +6,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { LambdaFailureDetector } from 'lambda-failure-detector';
 import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack, RunningSchedulerFailureDetection } from '../src';
+import { RUNNING_SCHEDULER_EXECUTION_FAILED_LOG } from '../src/settings/consts';
 
 const baseProps = {
   targetResource: {
@@ -479,6 +480,13 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
       MetricTransformations: [{
         MetricNamespace: 'EC2InstanceRunningScheduler',
         MetricName: 'NotificationPostFailure',
+      }],
+    });
+    template.hasResourceProperties('AWS::Logs::MetricFilter', {
+      FilterPattern: `"${RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}"`,
+      MetricTransformations: [{
+        MetricNamespace: 'EC2InstanceRunningScheduler',
+        MetricName: 'DurableExecutionFailure',
       }],
     });
   });

@@ -9,7 +9,7 @@ import {
   type LambdaFailureDetection,
   type LogFailureFilter,
 } from 'lambda-failure-detector';
-import { NOTIFICATION_POST_FAILED_LOG } from './settings/consts';
+import { NOTIFICATION_POST_FAILED_LOG, RUNNING_SCHEDULER_EXECUTION_FAILED_LOG } from './settings/consts';
 
 /** CloudWatch custom metric namespace for running-scheduler log-based failure metrics. */
 const METRIC_NAMESPACE = 'EC2InstanceRunningScheduler';
@@ -38,7 +38,7 @@ const RUNNING_SCHEDULER_LOG_FILTERS: LogFailureFilter[] = [
   },
   {
     id: DURABLE_EXECUTION_FAILURE_ID,
-    filterPattern: `"ERROR" - "processOneResource" - "ResourceWaitFailed" - "${NOTIFICATION_POST_FAILED_LOG}"`,
+    filterPattern: `"${RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}"`,
     metricNamespace: METRIC_NAMESPACE,
     metricName: 'DurableExecutionFailure',
   },
@@ -109,7 +109,7 @@ const requireLogFilterAlarm = (
  * - `lambdaThrottlesAlarm` – `AWS/Lambda` `Throttles` metric.
  * - `instanceStatusFailureAlarm` – log filter for `ResourceWaitFailed:*`.
  * - `notificationPostFailureAlarm` – log filter for `running-scheduler: notification post failed`.
- * - `durableExecutionFailureAlarm` – other handler-level `ERROR` logs (excluding the above).
+ * - `durableExecutionFailureAlarm` – log filter for {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}.
  *
  * Custom metrics are published under the `EC2InstanceRunningScheduler` namespace.
  */
@@ -118,7 +118,7 @@ export class RunningSchedulerFailureDetection extends LambdaFailureDetector {
   public readonly instanceStatusFailureAlarm: cloudwatch.Alarm;
   /** Fires when a configured Slack, SNS, or EventBridge notification send fails. */
   public readonly notificationPostFailureAlarm: cloudwatch.Alarm;
-  /** Fires on handler-level ERROR logs outside instance waiting and notification post failures. */
+  /** Fires when the handler logs {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}. */
   public readonly durableExecutionFailureAlarm: cloudwatch.Alarm;
 
   /**

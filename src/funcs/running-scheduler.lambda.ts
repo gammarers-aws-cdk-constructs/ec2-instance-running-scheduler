@@ -49,6 +49,7 @@ import {
   NOTIFICATION_EVENT_DETAIL_TYPE,
   NOTIFICATION_EVENT_SOURCE,
   NOTIFICATION_POST_FAILED_LOG,
+  RUNNING_SCHEDULER_EXECUTION_FAILED_LOG,
 } from '../settings/consts';
 
 /** Total SDK attempts per send, including the first call. Transient errors stay inside the SDK. */
@@ -540,36 +541,15 @@ const publishSummary = async (
 };
 
 /**
- * Durable Lambda entry point for the EC2 running scheduler.
+ * One scheduler invocation.
  *
- * Resolves instances via every page of `tag:GetResources`, runs {@link processOneResource} for each ARN
- * in parallel (bounded concurrency), then reports the run on the configured notification channel.
- * Logs are the default. Slack posts a parent message and per-instance thread replies. SNS publishes
- * one plain-text message after processing. EventBridge publishes one event to the configured bus.
- * Durable `step` / `wait` / `map` let the run resume across suspensions.
+ * Failures are not caught here. {@link handler} logs them and rethrows.
  *
- * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT`,
- * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS`, and `PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS`
- * via {@link parseResourceWaitLimitsFromEnv}, and map concurrency from
- * `PROCESS_RESOURCES_MAX_CONCURRENCY` via {@link parseMaxConcurrencyFromEnv}.
- * Slack reads its secret via {@link secretFetcher} inside each post step (Parameters and Secrets Lambda Extension).
- * The token and channel are not step results, so durable execution history does not store them.
- * Notification send failures are logged as {@link NOTIFICATION_POST_FAILED_LOG} and do not fail the run.
- *
- * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
+ * @param event - Scheduler payload.
  * @param ctx - Root durable execution context.
- * @returns
- * - `{ status: 'TargetResourcesNotFound' }` when every tag page has zero instance ARNs. Nothing is sent.
- * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
- * @throws {Error} If `Params` is invalid, the Slack secret is incomplete or not JSON with `token` and `channel`,
- *   or instance processing fails (including `ResourceWaitFailed:*` errors).
- * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not positive integers.
- * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
- * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.
- * @throws {import('fetch-retrier').FetchRetrierAbortError} When extension requests time out after all retries.
- * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} When secret-fetch retry options are invalid.
+ * @returns The same result as {@link handler}.
  */
-export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: DurableContext) => {
+const runRunningScheduler = async (event: SchedulerEvent, ctx: DurableContext) => {
   const params = event.Params;
 
   ctx.logger.info('running-scheduler: invocation', {
@@ -642,4 +622,59 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
     processed: targetResources.length,
     results: resultList,
   };
+};
+
+/**
+ * Writes {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG} for a failed invocation.
+ *
+ * The log carries no instance id, because this wrapper does not know which instance failed.
+ * It also omits secrets. {@link handler} rethrows the original error.
+ *
+ * @param error - Failure from {@link runRunningScheduler}.
+ */
+const logExecutionFailure = (error: unknown): void => {
+  console.error(RUNNING_SCHEDULER_EXECUTION_FAILED_LOG, {
+    identifier: undefined,
+    errorMessage: error instanceof Error ? error.message : undefined,
+  });
+};
+
+/**
+ * Durable Lambda entry point for the EC2 running scheduler.
+ *
+ * Resolves instances via every page of `tag:GetResources`, runs {@link processOneResource} for each ARN
+ * in parallel (bounded concurrency), then reports the run on the configured notification channel.
+ * Logs are the default. Slack posts a parent message and per-instance thread replies. SNS publishes
+ * one plain-text message after processing. EventBridge publishes one event to the configured bus.
+ * Durable `step` / `wait` / `map` let the run resume across suspensions.
+ *
+ * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT`,
+ * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS`, and `PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS`
+ * via {@link parseResourceWaitLimitsFromEnv}, and map concurrency from
+ * `PROCESS_RESOURCES_MAX_CONCURRENCY` via {@link parseMaxConcurrencyFromEnv}.
+ * Slack reads its secret via {@link secretFetcher} inside each post step (Parameters and Secrets Lambda Extension).
+ * The token and channel are not step results, so durable execution history does not store them.
+ * Notification send failures are logged as {@link NOTIFICATION_POST_FAILED_LOG} and do not fail the run.
+ * Any other failure is written with {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG} and rethrown.
+ *
+ * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
+ * @param ctx - Root durable execution context.
+ * @returns
+ * - `{ status: 'TargetResourcesNotFound' }` when every tag page has zero instance ARNs. Nothing is sent.
+ * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
+ * @throws {Error} If `Params` is invalid, the Slack secret is incomplete or not JSON with `token` and `channel`,
+ *   or instance processing fails (including `ResourceWaitFailed:*` errors).
+ * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not positive integers.
+ * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
+ * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.
+ * @throws {import('fetch-retrier').FetchRetrierAbortError} When extension requests time out after all retries.
+ * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} When secret-fetch retry options are invalid.
+ */
+export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: DurableContext) => {
+  try {
+    return await runRunningScheduler(event, ctx);
+  } catch (error: unknown) {
+    logExecutionFailure(error);
+    throw error;
+  }
 });
