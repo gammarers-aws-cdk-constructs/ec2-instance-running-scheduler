@@ -1,11 +1,17 @@
 import { App, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import * as events from 'aws-cdk-lib/aws-events';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import { EventBus } from 'aws-cdk-lib/aws-events';
+import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { Topic } from 'aws-cdk-lib/aws-sns';
 import { LambdaFailureDetector } from 'lambda-failure-detector';
-import { EC2InstanceRunningScheduler, EC2InstanceRunningScheduleStack, RunningSchedulerFailureDetection } from '../src';
+import {
+  EC2InstanceRunningScheduler,
+  EC2InstanceRunningScheduleStack,
+  type EC2InstanceRunningScheduleStackProps,
+  RunningSchedulerFailureDetection,
+} from '../src';
+import { RUNNING_SCHEDULER_EXECUTION_FAILED_LOG } from '../src/settings/consts';
 
 const baseProps = {
   targetResource: {
@@ -14,18 +20,22 @@ const baseProps = {
   },
 };
 
-/**
- * Function, alias, and both schedules that every running-scheduler stack wires.
- */
-const expectDurableSchedulerWiring = (template: Template): void => {
-  template.resourceCountIs('AWS::Lambda::Function', 1);
-  template.resourceCountIs('AWS::Lambda::Alias', 1);
-  template.resourceCountIs('AWS::Scheduler::Schedule', 2);
-};
+interface ScheduleDeadLetterArn {
+  readonly 'Fn::GetAtt': readonly [string, string];
+}
 
 interface SchedulerScheduleResource {
   readonly Properties?: {
     readonly State?: string;
+    readonly Target?: {
+      readonly RetryPolicy?: {
+        readonly MaximumEventAgeInSeconds?: number;
+        readonly MaximumRetryAttempts?: number;
+      };
+      readonly DeadLetterConfig?: {
+        readonly Arn?: ScheduleDeadLetterArn;
+      };
+    };
   };
 }
 
@@ -33,175 +43,234 @@ const isSchedulerScheduleResource = (value: unknown): value is SchedulerSchedule
   return typeof value === 'object' && value !== null;
 };
 
-describe('EC2InstanceRunningScheduleStack', () => {
-  describe('default (scheduling enabled, default schedule)', () => {
-    const app = new App();
-    const stack = new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', {
-      ...baseProps,
-    });
-    const template = Template.fromStack(stack);
+/**
+ * Both schedules retry twice within 15 minutes, then send the event to one retained queue.
+ * Asynchronous retry on `$LATEST` is not configured.
+ */
+const expectScheduleRetryAndDeadLetter = (template: Template): void => {
+  const maxEventAgeSeconds = Duration.minutes(15).toSeconds();
+  const retentionSeconds = Duration.days(14).toSeconds();
 
-    it('Should wire the durable scheduler', () => {
-      expectDurableSchedulerWiring(template);
-    });
+  template.resourceCountIs('AWS::Lambda::EventInvokeConfig', 0);
+  template.resourceCountIs('AWS::SQS::Queue', 1);
+  template.hasResource('AWS::SQS::Queue', {
+    DeletionPolicy: 'RetainExceptOnCreate',
+    UpdateReplacePolicy: 'Retain',
+    Properties: Match.objectLike({
+      MessageRetentionPeriod: retentionSeconds,
+      SqsManagedSseEnabled: true,
+    }),
+  });
 
-    it('Should set default resource wait limits and concurrency on Lambda', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Environment: {
-          Variables: {
-            NOTIFICATION_CHANNEL: 'logs',
-            PROCESS_RESOURCE_MAX_LOOP_COUNT: '90',
-            PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '1800',
-            PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS: '20',
-            PROCESS_RESOURCES_MAX_CONCURRENCY: '10',
-          },
-        },
-        MemorySize: 512,
-        Timeout: 900,
-        DurableConfig: {
-          ExecutionTimeout: 7200,
-          RetentionPeriodInDays: 1,
-        },
-      });
-    });
+  const queueLogicalId = Object.keys(template.findResources('AWS::SQS::Queue'))[0];
+  if (queueLogicalId === undefined) {
+    throw new Error('Schedule dead-letter queue is missing');
+  }
+  const deadLetterArn: ScheduleDeadLetterArn = { 'Fn::GetAtt': [queueLogicalId, 'Arn'] };
 
-    it('Should retain logs for three months and keep them after a successful create', () => {
-      template.hasResource('AWS::Logs::LogGroup', {
-        DeletionPolicy: 'RetainExceptOnCreate',
-        UpdateReplacePolicy: 'Retain',
-        Properties: Match.objectLike({
-          RetentionInDays: 90,
+  const targets = Object.values(template.findResources('AWS::Scheduler::Schedule')).flatMap((resource) => {
+    if (!isSchedulerScheduleResource(resource)) {
+      return [];
+    }
+    return [resource.Properties?.Target];
+  });
+  expect(targets).toHaveLength(2);
+  for (const target of targets) {
+    expect(target?.RetryPolicy).toEqual({
+      MaximumEventAgeInSeconds: maxEventAgeSeconds,
+      MaximumRetryAttempts: 2,
+    });
+    expect(target?.DeadLetterConfig?.Arn).toEqual(deadLetterArn);
+  }
+
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: {
+      Statement: Match.arrayWith([
+        Match.objectLike({
+          Action: 'sqs:SendMessage',
+          Effect: 'Allow',
+          Resource: deadLetterArn,
         }),
-      });
-    });
+      ]),
+    },
+  });
+};
 
-    it('Should have default Start Schedule (50 7 MON-FRI Etc/UTC)', () => {
-      template.hasResourceProperties('AWS::Scheduler::Schedule', {
-        ScheduleExpression: 'cron(50 7 ? * MON-FRI *)',
-        ScheduleExpressionTimezone: 'Etc/UTC',
-      });
-    });
+/**
+ * Function, alias, both schedules, and the short Scheduler retry plus dead-letter queue.
+ */
+const expectDurableSchedulerWiring = (template: Template): void => {
+  template.resourceCountIs('AWS::Lambda::Function', 1);
+  template.resourceCountIs('AWS::Lambda::Alias', 1);
+  template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+  expectScheduleRetryAndDeadLetter(template);
+};
 
-    it('Should have default Stop Schedule (5 19 MON-FRI Etc/UTC)', () => {
-      template.hasResourceProperties('AWS::Scheduler::Schedule', {
-        ScheduleExpression: 'cron(5 19 ? * MON-FRI *)',
-        ScheduleExpressionTimezone: 'Etc/UTC',
-      });
-    });
+const defaultStackProps = {
+  ...baseProps,
+} satisfies EC2InstanceRunningScheduleStackProps;
 
-    it('Should scope start/stop IAM to tagged instances in this account and region', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Sid: 'GetResources',
-              Action: 'tag:GetResources',
-              Resource: '*',
-            }),
-            Match.objectLike({
-              Sid: 'Ec2DescribeInstances',
-              Action: 'ec2:DescribeInstances',
-              Resource: '*',
-            }),
-            Match.objectLike({
-              Sid: 'Ec2StartStopTaggedInstances',
-              Action: ['ec2:StartInstances', 'ec2:StopInstances'],
-              Resource: {
-                'Fn::Join': [
-                  '',
-                  [
-                    'arn:',
-                    { Ref: 'AWS::Partition' },
-                    ':ec2:',
-                    { Ref: 'AWS::Region' },
-                    ':',
-                    { Ref: 'AWS::AccountId' },
-                    ':instance/*',
-                  ],
-                ],
-              },
-              Condition: {
-                StringEquals: {
-                  'aws:ResourceTag/WorkHoursRunning': ['YES'],
-                },
-              },
-            }),
-          ]),
+const disabledStackProps = {
+  ...baseProps,
+  enableScheduling: false,
+} satisfies EC2InstanceRunningScheduleStackProps;
+
+const specificStackProps = {
+  ...baseProps,
+  enableScheduling: true,
+  startSchedule: {
+    timezone: TimeZone.ASIA_TOKYO,
+    minute: '55',
+    hour: '8',
+    week: 'MON-FRI',
+  },
+  stopSchedule: {
+    timezone: TimeZone.ASIA_TOKYO,
+    minute: '5',
+    hour: '19',
+    week: 'MON-FRI',
+  },
+} satisfies EC2InstanceRunningScheduleStackProps;
+
+/**
+ * Synthesizes the schedule stack for one props combination.
+ */
+const synthesizeScheduleStack = (props: EC2InstanceRunningScheduleStackProps): Template => {
+  const app = new App();
+  const stack = new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', props);
+  return Template.fromStack(stack);
+};
+
+describe('EC2InstanceRunningScheduleStack', () => {
+  it('Should wire the durable scheduler', () => {
+    expectDurableSchedulerWiring(synthesizeScheduleStack(defaultStackProps));
+  });
+
+  it('Should set default resource wait limits and concurrency on Lambda', () => {
+    const template = synthesizeScheduleStack(defaultStackProps);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          NOTIFICATION_CHANNEL: 'logs',
+          PROCESS_RESOURCE_MAX_LOOP_COUNT: '90',
+          PROCESS_RESOURCE_MAX_ELAPSED_SECONDS: '1800',
+          PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS: '20',
+          PROCESS_RESOURCES_MAX_CONCURRENCY: '10',
         },
-      });
-    });
-
-    it('Should match snapshot', () => {
-      expect(template.toJSON()).toMatchSnapshot('default');
+      },
+      MemorySize: 512,
+      Timeout: 900,
+      DurableConfig: {
+        ExecutionTimeout: 7200,
+        RetentionPeriodInDays: 1,
+      },
     });
   });
 
-  describe('disable (enableScheduling: false)', () => {
-    const app = new App();
-    const stack = new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', {
-      ...baseProps,
-      enableScheduling: false,
-    });
-    const template = Template.fromStack(stack);
-
-    it('Should have Scheduler 2 exist but disabled', () => {
-      expectDurableSchedulerWiring(template);
-      const schedules = template.findResources('AWS::Scheduler::Schedule');
-      const states = Object.values(schedules).flatMap((resource) => {
-        if (!isSchedulerScheduleResource(resource)) {
-          return [];
-        }
-        return [resource.Properties?.State];
-      });
-      expect(states).toEqual(['DISABLED', 'DISABLED']);
-    });
-
-    it('Should match snapshot', () => {
-      expect(template.toJSON()).toMatchSnapshot('disable');
+  it('Should retain logs for three months and keep them after a successful create', () => {
+    const template = synthesizeScheduleStack(defaultStackProps);
+    template.hasResource('AWS::Logs::LogGroup', {
+      DeletionPolicy: 'RetainExceptOnCreate',
+      UpdateReplacePolicy: 'Retain',
+      Properties: Match.objectLike({
+        RetentionInDays: 90,
+      }),
     });
   });
 
-  describe('specific (custom schedule and timezone)', () => {
-    const app = new App();
-    const stack = new EC2InstanceRunningScheduleStack(app, 'EC2InstanceRunningScheduleStack', {
-      ...baseProps,
-      enableScheduling: true,
-      startSchedule: {
-        timezone: TimeZone.ASIA_TOKYO,
-        minute: '55',
-        hour: '8',
-        week: 'MON-FRI',
+  it('Should have default Start Schedule (50 7 MON-FRI Etc/UTC)', () => {
+    synthesizeScheduleStack(defaultStackProps).hasResourceProperties('AWS::Scheduler::Schedule', {
+      ScheduleExpression: 'cron(50 7 ? * MON-FRI *)',
+      ScheduleExpressionTimezone: 'Etc/UTC',
+    });
+  });
+
+  it('Should have default Stop Schedule (5 19 MON-FRI Etc/UTC)', () => {
+    synthesizeScheduleStack(defaultStackProps).hasResourceProperties('AWS::Scheduler::Schedule', {
+      ScheduleExpression: 'cron(5 19 ? * MON-FRI *)',
+      ScheduleExpressionTimezone: 'Etc/UTC',
+    });
+  });
+
+  it('Should scope start/stop IAM to tagged instances in this account and region', () => {
+    synthesizeScheduleStack(defaultStackProps).hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Sid: 'GetResources',
+            Action: 'tag:GetResources',
+            Resource: '*',
+          }),
+          Match.objectLike({
+            Sid: 'Ec2DescribeInstances',
+            Action: 'ec2:DescribeInstances',
+            Resource: '*',
+          }),
+          Match.objectLike({
+            Sid: 'Ec2StartStopTaggedInstances',
+            Action: ['ec2:StartInstances', 'ec2:StopInstances'],
+            Resource: {
+              'Fn::Join': [
+                '',
+                [
+                  'arn:',
+                  { Ref: 'AWS::Partition' },
+                  ':ec2:',
+                  { Ref: 'AWS::Region' },
+                  ':',
+                  { Ref: 'AWS::AccountId' },
+                  ':instance/*',
+                ],
+              ],
+            },
+            Condition: {
+              StringEquals: {
+                'aws:ResourceTag/WorkHoursRunning': ['YES'],
+              },
+            },
+          }),
+        ]),
       },
-      stopSchedule: {
-        timezone: TimeZone.ASIA_TOKYO,
-        minute: '5',
-        hour: '19',
-        week: 'MON-FRI',
-      },
     });
-    const template = Template.fromStack(stack);
+  });
 
-    it('Should wire the durable scheduler', () => {
-      expectDurableSchedulerWiring(template);
+  it('Should have Scheduler 2 exist but disabled', () => {
+    const template = synthesizeScheduleStack(disabledStackProps);
+    expectDurableSchedulerWiring(template);
+    const schedules = template.findResources('AWS::Scheduler::Schedule');
+    const states = Object.values(schedules).flatMap((resource) => {
+      if (!isSchedulerScheduleResource(resource)) {
+        return [];
+      }
+      return [resource.Properties?.State];
     });
+    expect(states).toEqual(['DISABLED', 'DISABLED']);
+  });
 
-    it('Should have Start Scheduler with Asia/Tokyo', () => {
-      template.hasResourceProperties('AWS::Scheduler::Schedule', {
-        ScheduleExpression: 'cron(55 8 ? * MON-FRI *)',
-        ScheduleExpressionTimezone: 'Asia/Tokyo',
-      });
-    });
+  it('Should wire the durable scheduler for the custom schedule', () => {
+    expectDurableSchedulerWiring(synthesizeScheduleStack(specificStackProps));
+  });
 
-    it('Should have Stop Scheduler with Asia/Tokyo', () => {
-      template.hasResourceProperties('AWS::Scheduler::Schedule', {
-        ScheduleExpression: 'cron(5 19 ? * MON-FRI *)',
-        ScheduleExpressionTimezone: 'Asia/Tokyo',
-      });
+  it('Should have Start Scheduler with Asia/Tokyo', () => {
+    synthesizeScheduleStack(specificStackProps).hasResourceProperties('AWS::Scheduler::Schedule', {
+      ScheduleExpression: 'cron(55 8 ? * MON-FRI *)',
+      ScheduleExpressionTimezone: 'Asia/Tokyo',
     });
+  });
 
-    it('Should match snapshot', () => {
-      expect(template.toJSON()).toMatchSnapshot('specific');
+  it('Should have Stop Scheduler with Asia/Tokyo', () => {
+    synthesizeScheduleStack(specificStackProps).hasResourceProperties('AWS::Scheduler::Schedule', {
+      ScheduleExpression: 'cron(5 19 ? * MON-FRI *)',
+      ScheduleExpressionTimezone: 'Asia/Tokyo',
     });
+  });
+
+  it.each([
+    ['default', defaultStackProps],
+    ['disable', disabledStackProps],
+    ['specific', specificStackProps],
+  ] as const)('matches the %s snapshot', (name, props) => {
+    expect(synthesizeScheduleStack(props).toJSON()).toMatchSnapshot(name);
   });
 });
 
@@ -308,7 +377,7 @@ describe('EC2InstanceRunningScheduler runtime durable logGroup', () => {
         retentionPeriod: Duration.days(7),
       },
       logGroup: {
-        retention: logs.RetentionDays.ONE_YEAR,
+        retention: RetentionDays.ONE_YEAR,
         removalPolicy: RemovalPolicy.RETAIN,
       },
     });
@@ -347,7 +416,7 @@ describe('EC2InstanceRunningScheduler runtime durable logGroup', () => {
           maxConcurrency: 0,
         },
       });
-    }).toThrow(/runtime.maxConcurrency/);
+    }).toThrow('runtime.maxConcurrency must be a positive integer');
   });
 
   it('throws when statusChangeWaitSeconds is not a positive integer', () => {
@@ -361,7 +430,7 @@ describe('EC2InstanceRunningScheduler runtime durable logGroup', () => {
           statusChangeWaitSeconds: -1,
         },
       });
-    }).toThrow(/resourceWait.statusChangeWaitSeconds/);
+    }).toThrow('resourceWait.statusChangeWaitSeconds must be a positive integer');
   });
 });
 
@@ -414,12 +483,19 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
         MetricName: 'NotificationPostFailure',
       }],
     });
+    template.hasResourceProperties('AWS::Logs::MetricFilter', {
+      FilterPattern: `"${RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}"`,
+      MetricTransformations: [{
+        MetricNamespace: 'EC2InstanceRunningScheduler',
+        MetricName: 'DurableExecutionFailure',
+      }],
+    });
   });
 
   it('wires alarm actions when alarmTopic is provided', () => {
     const app = new App();
     const stack = new Stack(app, 'TestStack');
-    const alarmTopic = new sns.Topic(stack, 'OpsAlerts');
+    const alarmTopic = new Topic(stack, 'OpsAlerts');
     new EC2InstanceRunningScheduler(stack, 'Scheduler', {
       ...baseProps,
       failureDetection: {
@@ -440,7 +516,7 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
     const app = new App();
     const stack = new Stack(app, 'TestStack');
     const alarmTopicArn = 'arn:aws:sns:ap-northeast-1:123456789012:ops-alerts';
-    const alarmTopic = sns.Topic.fromTopicArn(stack, 'ImportedOpsAlerts', alarmTopicArn);
+    const alarmTopic = Topic.fromTopicArn(stack, 'ImportedOpsAlerts', alarmTopicArn);
     new EC2InstanceRunningScheduler(stack, 'Scheduler', {
       ...baseProps,
       failureDetection: {
@@ -460,11 +536,11 @@ describe('EC2InstanceRunningScheduler failureDetection', () => {
     const findLogFilterAlarm = jest.spyOn(LambdaFailureDetector.prototype, 'findLogFilterAlarm').mockReturnValue(undefined);
     const app = new App();
     const stack = new Stack(app, 'TestStack');
-    const logGroup = new logs.LogGroup(stack, 'Logs');
-    const runningScheduleFunction = new lambda.Function(stack, 'RunningSchedule', {
-      runtime: lambda.Runtime.NODEJS_24_X,
+    const logGroup = new LogGroup(stack, 'Logs');
+    const runningScheduleFunction = new Function(stack, 'RunningSchedule', {
+      runtime: Runtime.NODEJS_24_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline('exports.handler = async () => undefined;'),
+      code: Code.fromInline('exports.handler = async () => undefined;'),
     });
 
     try {
@@ -535,7 +611,7 @@ describe('EC2InstanceRunningScheduler notification', () => {
       ...baseProps,
       notification: {
         channel: 'sns',
-        topic: sns.Topic.fromTopicArn(stack, 'NotifyTopic', topicArn),
+        topic: Topic.fromTopicArn(stack, 'NotifyTopic', topicArn),
       },
     });
     const template = Template.fromStack(stack);
@@ -568,7 +644,7 @@ describe('EC2InstanceRunningScheduler notification', () => {
       ...baseProps,
       notification: {
         channel: 'eventBridge',
-        eventBus: events.EventBus.fromEventBusName(stack, 'NotifyBus', 'ops-bus'),
+        eventBus: EventBus.fromEventBusName(stack, 'NotifyBus', 'ops-bus'),
       },
     });
     const template = Template.fromStack(stack);

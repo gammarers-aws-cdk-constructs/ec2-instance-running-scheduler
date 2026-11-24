@@ -1,12 +1,22 @@
 import { ArnFormat, Duration, RemovalPolicy, Stack, TimeZone } from 'aws-cdk-lib';
-import * as events from 'aws-cdk-lib/aws-events';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as scheduler from 'aws-cdk-lib/aws-scheduler';
-import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
+import { type IEventBus } from 'aws-cdk-lib/aws-events';
+import { Effect, ManagedPolicy, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import {
+  ApplicationLogLevel,
+  Architecture,
+  type IFunction,
+  LoggingFormat,
+  ParamsAndSecretsLayerVersion,
+  ParamsAndSecretsLogLevel,
+  ParamsAndSecretsVersions,
+  SystemLogLevel,
+} from 'aws-cdk-lib/aws-lambda';
+import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { Schedule as SchedulerSchedule, ScheduleExpression, ScheduleTargetInput } from 'aws-cdk-lib/aws-scheduler';
+import { LambdaInvoke } from 'aws-cdk-lib/aws-scheduler-targets';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import { type ITopic } from 'aws-cdk-lib/aws-sns';
+import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { RunningSchedulerFunction } from './funcs/running-scheduler-function';
 import {
@@ -82,7 +92,7 @@ export interface SnsNotification {
   /** Selects Amazon SNS. */
   readonly channel: typeof NOTIFICATION_CHANNEL_SNS;
   /** Existing topic. Attach an email subscription on this topic to deliver mail. */
-  readonly topic: sns.ITopic;
+  readonly topic: ITopic;
 }
 
 /**
@@ -92,7 +102,7 @@ export interface EventBridgeNotification {
   /** Selects an EventBridge custom bus. */
   readonly channel: typeof NOTIFICATION_CHANNEL_EVENT_BRIDGE;
   /** Existing custom event bus. */
-  readonly eventBus: events.IEventBus;
+  readonly eventBus: IEventBus;
 }
 
 /**
@@ -195,7 +205,7 @@ export interface RunningSchedulerLogGroupProps {
    *
    * @default RetentionDays.THREE_MONTHS
    */
-  readonly retention?: logs.RetentionDays;
+  readonly retention?: RetentionDays;
   /**
    * Removal policy for the log group.
    *
@@ -263,6 +273,16 @@ const DEFAULT_LAMBDA_MEMORY_SIZE = 512;
 const DEFAULT_LAMBDA_TIMEOUT = Duration.minutes(15);
 const DEFAULT_DURABLE_EXECUTION_TIMEOUT = Duration.hours(2);
 const DEFAULT_DURABLE_RETENTION_PERIOD = Duration.days(1);
+/**
+ * Extra Scheduler deliveries after the first attempt.
+ *
+ * Exhausted events are sent to the schedule dead-letter queue.
+ */
+const SCHEDULE_TARGET_RETRY_ATTEMPTS = 2;
+/** Scheduler stops retrying once the original event is this old. */
+const SCHEDULE_TARGET_MAX_EVENT_AGE = Duration.minutes(15);
+/** How long exhausted schedule events stay in the dead-letter queue. */
+const SCHEDULE_DEAD_LETTER_RETENTION = Duration.days(14);
 
 /**
  * Returns `value` when set, otherwise `defaultValue`.
@@ -278,7 +298,7 @@ const resolvePositiveInteger = (name: string, value: number | undefined, default
     return defaultValue;
   }
   if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)})`);
+    throw new Error(`${name} must be a positive integer`);
   }
   return value;
 };
@@ -345,6 +365,38 @@ const assertTargetResourceForIam = (targetResource: TargetResource): void => {
 };
 
 /**
+ * Schedule target for one start or stop cron.
+ *
+ * Retry is set here because the schedule invokes alias `live`. `retryAttempts` on the function
+ * would only configure asynchronous `EventInvokeConfig` for `$LATEST`.
+ *
+ * @param alias - Published alias the schedule invokes.
+ * @param deadLetterQueue - Queue that receives events after the retry limit.
+ * @param targetResource - Tag key and values copied into the schedule input.
+ * @param mode - `Start` or `Stop`.
+ * @returns Lambda target with a short retry policy and the shared dead-letter queue.
+ */
+const scheduleLambdaTarget = (
+  alias: IFunction,
+  deadLetterQueue: Queue,
+  targetResource: TargetResource,
+  mode: 'Start' | 'Stop',
+): LambdaInvoke => {
+  return new LambdaInvoke(alias, {
+    retryAttempts: SCHEDULE_TARGET_RETRY_ATTEMPTS,
+    maxEventAge: SCHEDULE_TARGET_MAX_EVENT_AGE,
+    deadLetterQueue,
+    input: ScheduleTargetInput.fromObject({
+      Params: {
+        TagKey: targetResource.tagKey,
+        TagValues: targetResource.tagValues,
+        Mode: mode,
+      },
+    }),
+  });
+};
+
+/**
  * IAM statement that allows start/stop only on EC2 instances in this account and region
  * whose tags match {@link TargetResource}.
  *
@@ -359,7 +411,7 @@ const assertTargetResourceForIam = (targetResource: TargetResource): void => {
 const taggedInstanceStartStopStatement = (
   scope: Construct,
   targetResource: TargetResource,
-): iam.PolicyStatement => {
+): PolicyStatement => {
   const instanceArn = Stack.of(scope).formatArn({
     service: 'ec2',
     resource: 'instance',
@@ -367,9 +419,9 @@ const taggedInstanceStartStopStatement = (
     arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
   });
 
-  return new iam.PolicyStatement({
+  return new PolicyStatement({
     sid: 'Ec2StartStopTaggedInstances',
-    effect: iam.Effect.ALLOW,
+    effect: Effect.ALLOW,
     actions: [
       'ec2:StartInstances',
       'ec2:StopInstances',
@@ -386,9 +438,10 @@ const taggedInstanceStartStopStatement = (
 /**
  * Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
  *
- * Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
- * the Resource Groups Tagging API and EC2 APIs. Notification uses {@link EC2InstanceRunningSchedulerProps.notification}
- * (logs only when omitted).
+ * Each schedule invokes alias `live` with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
+ * the Resource Groups Tagging API and EC2 APIs. A failed delivery is retried twice and only for
+ * 15 minutes, then sent to an SQS dead-letter queue created by this construct. Notification uses
+ * {@link EC2InstanceRunningSchedulerProps.notification} (logs only when omitted).
  *
  * Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
  * and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
@@ -404,7 +457,8 @@ export class EC2InstanceRunningScheduler extends Construct {
 
   /**
    * Defines IAM, logging, optional failure detection alarms, two cron schedules (start/stop),
-   * and the bundled running-scheduler Lambda (Node.js, Durable Execution).
+   * a dead-letter queue for exhausted schedule deliveries, and the bundled running-scheduler Lambda
+   * (Node.js, Durable Execution).
    *
    * @param scope - Parent construct.
    * @param id - Construct id.
@@ -451,17 +505,16 @@ export class EC2InstanceRunningScheduler extends Construct {
 
     // Durable Functions-based Running Scheduler (previous Step Functions logic implemented in Lambda).
     // Durable Execution requires Node.js 22+.
-    const runningScheduleFunctionLogGroup = new logs.LogGroup(this, 'RunningSchedulerFunctionLogGroup', {
-      retention: props.logGroup?.retention ?? logs.RetentionDays.THREE_MONTHS,
+    const runningScheduleFunctionLogGroup = new LogGroup(this, 'RunningSchedulerFunctionLogGroup', {
+      retention: props.logGroup?.retention ?? RetentionDays.THREE_MONTHS,
       removalPolicy: props.logGroup?.removalPolicy ?? RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
 
     const runningScheduleFunction = new RunningSchedulerFunction(this, 'RunningSchedulerFunction', {
       description: 'Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.',
-      architecture: lambda.Architecture.ARM_64,
+      architecture: Architecture.ARM_64,
       timeout: props.runtime?.timeout ?? DEFAULT_LAMBDA_TIMEOUT,
       memorySize,
-      retryAttempts: 2,
       durableConfig: {
         executionTimeout: props.durable?.executionTimeout ?? DEFAULT_DURABLE_EXECUTION_TIMEOUT,
         retentionPeriod: props.durable?.retentionPeriod ?? DEFAULT_DURABLE_RETENTION_PERIOD,
@@ -475,38 +528,38 @@ export class EC2InstanceRunningScheduler extends Construct {
       },
       ...(slackSecret
         ? {
-          paramsAndSecrets: lambda.ParamsAndSecretsLayerVersion.fromVersion(lambda.ParamsAndSecretsVersions.V1_0_103, {
+          paramsAndSecrets: ParamsAndSecretsLayerVersion.fromVersion(ParamsAndSecretsVersions.V1_0_103, {
             // Required by aws-lambda-secret-fetcher (extension HTTP API on localhost; port from PARAMETERS_SECRETS_EXTENSION_HTTP_PORT).
             cacheSize: 500,
-            logLevel: lambda.ParamsAndSecretsLogLevel.INFO,
+            logLevel: ParamsAndSecretsLogLevel.INFO,
           }),
         }
         : {}),
-      role: new iam.Role(this, 'RunningSchedulerFunctionRole', {
+      role: new Role(this, 'RunningSchedulerFunctionRole', {
         description: 'Allows the running scheduler to describe instances, start/stop tagged EC2 instances, and send the configured notification.',
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicDurableExecutionRolePolicy'),
+          ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+          ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicDurableExecutionRolePolicy'),
         ],
       }),
       logGroup: runningScheduleFunctionLogGroup,
-      loggingFormat: lambda.LoggingFormat.JSON,
-      systemLogLevelV2: lambda.SystemLogLevel.INFO,
-      applicationLogLevelV2: lambda.ApplicationLogLevel.INFO,
+      loggingFormat: LoggingFormat.JSON,
+      systemLogLevelV2: SystemLogLevel.INFO,
+      applicationLogLevelV2: ApplicationLogLevel.INFO,
     });
-    runningScheduleFunction.addToRolePolicy(new iam.PolicyStatement({
+    runningScheduleFunction.addToRolePolicy(new PolicyStatement({
       sid: 'GetResources',
-      effect: iam.Effect.ALLOW,
+      effect: Effect.ALLOW,
       actions: [
         'tag:GetResources',
       ],
       // Resource Groups Tagging API does not support resource-level permissions.
       resources: ['*'],
     }));
-    runningScheduleFunction.addToRolePolicy(new iam.PolicyStatement({
+    runningScheduleFunction.addToRolePolicy(new PolicyStatement({
       sid: 'Ec2DescribeInstances',
-      effect: iam.Effect.ALLOW,
+      effect: Effect.ALLOW,
       actions: [
         'ec2:DescribeInstances',
       ],
@@ -535,48 +588,49 @@ export class EC2InstanceRunningScheduler extends Construct {
     // See: https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started-iac.html
     const runningScheduleFunctionAlias = runningScheduleFunction.addAlias('live');
 
+    // One queue for both crons. The schedule input still distinguishes Start from Stop.
+    const scheduleDeadLetterQueue = new Queue(this, 'ScheduleDeadLetterQueue', {
+      retentionPeriod: SCHEDULE_DEAD_LETTER_RETENTION,
+      encryption: QueueEncryption.SQS_MANAGED,
+      removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
+    });
+
     // Schedules stay enabled unless the caller sets enableScheduling to false.
     const scheduleEnabled = props.enableScheduling !== false;
 
     // Durable Functions: Lambda performs tag lookup and instance start/stop in a single run.
-    new scheduler.Schedule(this, 'RunningStartSchedule', {
+    new SchedulerSchedule(this, 'RunningStartSchedule', {
       description: 'running start schedule',
       enabled: scheduleEnabled,
-      schedule: scheduler.ScheduleExpression.cron({
+      schedule: ScheduleExpression.cron({
         minute: props.startSchedule?.minute ?? '50',
         hour: props.startSchedule?.hour ?? '7',
         weekDay: props.startSchedule?.week ?? 'MON-FRI',
         timeZone: props.startSchedule?.timezone ?? TimeZone.ETC_UTC,
       }),
-      target: new targets.LambdaInvoke(runningScheduleFunctionAlias, {
-        input: scheduler.ScheduleTargetInput.fromObject({
-          Params: {
-            TagKey: props.targetResource.tagKey,
-            TagValues: props.targetResource.tagValues,
-            Mode: 'Start',
-          },
-        }),
-      }),
+      target: scheduleLambdaTarget(
+        runningScheduleFunctionAlias,
+        scheduleDeadLetterQueue,
+        props.targetResource,
+        'Start',
+      ),
     });
 
-    new scheduler.Schedule(this, 'RunningStopSchedule', {
+    new SchedulerSchedule(this, 'RunningStopSchedule', {
       description: 'running stop schedule',
       enabled: scheduleEnabled,
-      schedule: scheduler.ScheduleExpression.cron({
+      schedule: ScheduleExpression.cron({
         minute: props.stopSchedule?.minute ?? '5',
         hour: props.stopSchedule?.hour ?? '19',
         weekDay: props.stopSchedule?.week ?? 'MON-FRI',
         timeZone: props.stopSchedule?.timezone ?? TimeZone.ETC_UTC,
       }),
-      target: new targets.LambdaInvoke(runningScheduleFunctionAlias, {
-        input: scheduler.ScheduleTargetInput.fromObject({
-          Params: {
-            TagKey: props.targetResource.tagKey,
-            TagValues: props.targetResource.tagValues,
-            Mode: 'Stop',
-          },
-        }),
-      }),
+      target: scheduleLambdaTarget(
+        runningScheduleFunctionAlias,
+        scheduleDeadLetterQueue,
+        props.targetResource,
+        'Stop',
+      ),
     });
   }
 }

@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default schedule) Should match snapshot: default 1`] = `
+exports[`EC2InstanceRunningScheduleStack matches the default snapshot: default 1`] = `
 {
   "Parameters": {
     "BootstrapVersion": {
@@ -23,7 +23,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "6a9a73e093e6d8db1b5774ee0c4e859fd59d0eeb18b71c3ad5494d224ec8a698.zip",
+          "S3Key": "a14990c6e549108743e7b381184f29370302db5c1bcb47e234ffd5dfd1b57ae5.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -68,7 +68,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601e65ea8e19f1ec7e11e0ad341f561bf95",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966019b644015578efbc23f31c3622be6e4d5",
             "Version",
           ],
         },
@@ -76,7 +76,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601e65ea8e19f1ec7e11e0ad341f561bf95": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966019b644015578efbc23f31c3622be6e4d5": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -86,16 +86,6 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         },
       },
       "Type": "AWS::Lambda::Version",
-    },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionEventInvokeConfig871A1557": {
-      "Properties": {
-        "FunctionName": {
-          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
-        },
-        "MaximumRetryAttempts": 2,
-        "Qualifier": "$LATEST",
-      },
-      "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
       "DeletionPolicy": "RetainExceptOnCreate",
@@ -225,10 +215,18 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           "Arn": {
             "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
           },
+          "DeadLetterConfig": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                "Arn",
+              ],
+            },
+          },
           "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Start"}}",
           "RetryPolicy": {
-            "MaximumEventAgeInSeconds": 86400,
-            "MaximumRetryAttempts": 185,
+            "MaximumEventAgeInSeconds": 900,
+            "MaximumRetryAttempts": 2,
           },
           "RoleArn": {
             "Fn::GetAtt": [
@@ -253,10 +251,18 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
           "Arn": {
             "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
           },
+          "DeadLetterConfig": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                "Arn",
+              ],
+            },
+          },
           "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Stop"}}",
           "RetryPolicy": {
-            "MaximumEventAgeInSeconds": 86400,
-            "MaximumRetryAttempts": 185,
+            "MaximumEventAgeInSeconds": 900,
+            "MaximumRetryAttempts": 2,
           },
           "RoleArn": {
             "Fn::GetAtt": [
@@ -267,6 +273,15 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
         },
       },
       "Type": "AWS::Scheduler::Schedule",
+    },
+    "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC": {
+      "DeletionPolicy": "RetainExceptOnCreate",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true,
+      },
+      "Type": "AWS::SQS::Queue",
+      "UpdateReplacePolicy": "Retain",
     },
     "SchedulerRoleForTargete08d553488D726": {
       "Properties": {
@@ -323,6 +338,16 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
                 "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
               },
             },
+            {
+              "Action": "sqs:SendMessage",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                  "Arn",
+                ],
+              },
+            },
           ],
           "Version": "2012-10-17",
         },
@@ -366,7 +391,7 @@ exports[`EC2InstanceRunningScheduleStack default (scheduling enabled, default sc
 }
 `;
 
-exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Should match snapshot: disable 1`] = `
+exports[`EC2InstanceRunningScheduleStack matches the disable snapshot: disable 1`] = `
 {
   "Parameters": {
     "BootstrapVersion": {
@@ -389,7 +414,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "6a9a73e093e6d8db1b5774ee0c4e859fd59d0eeb18b71c3ad5494d224ec8a698.zip",
+          "S3Key": "a14990c6e549108743e7b381184f29370302db5c1bcb47e234ffd5dfd1b57ae5.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -434,7 +459,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601e65ea8e19f1ec7e11e0ad341f561bf95",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966019b644015578efbc23f31c3622be6e4d5",
             "Version",
           ],
         },
@@ -442,7 +467,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601e65ea8e19f1ec7e11e0ad341f561bf95": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966019b644015578efbc23f31c3622be6e4d5": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -452,16 +477,6 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         },
       },
       "Type": "AWS::Lambda::Version",
-    },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionEventInvokeConfig871A1557": {
-      "Properties": {
-        "FunctionName": {
-          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
-        },
-        "MaximumRetryAttempts": 2,
-        "Qualifier": "$LATEST",
-      },
-      "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
       "DeletionPolicy": "RetainExceptOnCreate",
@@ -591,10 +606,18 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           "Arn": {
             "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
           },
+          "DeadLetterConfig": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                "Arn",
+              ],
+            },
+          },
           "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Start"}}",
           "RetryPolicy": {
-            "MaximumEventAgeInSeconds": 86400,
-            "MaximumRetryAttempts": 185,
+            "MaximumEventAgeInSeconds": 900,
+            "MaximumRetryAttempts": 2,
           },
           "RoleArn": {
             "Fn::GetAtt": [
@@ -619,10 +642,18 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
           "Arn": {
             "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
           },
+          "DeadLetterConfig": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                "Arn",
+              ],
+            },
+          },
           "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Stop"}}",
           "RetryPolicy": {
-            "MaximumEventAgeInSeconds": 86400,
-            "MaximumRetryAttempts": 185,
+            "MaximumEventAgeInSeconds": 900,
+            "MaximumRetryAttempts": 2,
           },
           "RoleArn": {
             "Fn::GetAtt": [
@@ -633,6 +664,15 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
         },
       },
       "Type": "AWS::Scheduler::Schedule",
+    },
+    "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC": {
+      "DeletionPolicy": "RetainExceptOnCreate",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true,
+      },
+      "Type": "AWS::SQS::Queue",
+      "UpdateReplacePolicy": "Retain",
     },
     "SchedulerRoleForTargete08d553488D726": {
       "Properties": {
@@ -689,6 +729,16 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
                 "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
               },
             },
+            {
+              "Action": "sqs:SendMessage",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                  "Arn",
+                ],
+              },
+            },
           ],
           "Version": "2012-10-17",
         },
@@ -732,7 +782,7 @@ exports[`EC2InstanceRunningScheduleStack disable (enableScheduling: false) Shoul
 }
 `;
 
-exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone) Should match snapshot: specific 1`] = `
+exports[`EC2InstanceRunningScheduleStack matches the specific snapshot: specific 1`] = `
 {
   "Parameters": {
     "BootstrapVersion": {
@@ -755,7 +805,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "6a9a73e093e6d8db1b5774ee0c4e859fd59d0eeb18b71c3ad5494d224ec8a698.zip",
+          "S3Key": "a14990c6e549108743e7b381184f29370302db5c1bcb47e234ffd5dfd1b57ae5.zip",
         },
         "Description": "Starts and stops tagged EC2 instances on EventBridge Scheduler schedules.",
         "DurableConfig": {
@@ -800,7 +850,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         },
         "FunctionVersion": {
           "Fn::GetAtt": [
-            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601e65ea8e19f1ec7e11e0ad341f561bf95",
+            "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966019b644015578efbc23f31c3622be6e4d5",
             "Version",
           ],
         },
@@ -808,7 +858,7 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
       },
       "Type": "AWS::Lambda::Alias",
     },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B96601e65ea8e19f1ec7e11e0ad341f561bf95": {
+    "EC2InstanceRunningSchedulerRunningSchedulerFunctionCurrentVersion11B966019b644015578efbc23f31c3622be6e4d5": {
       "Metadata": {
         "aws:cdk:do-not-refactor": true,
       },
@@ -818,16 +868,6 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         },
       },
       "Type": "AWS::Lambda::Version",
-    },
-    "EC2InstanceRunningSchedulerRunningSchedulerFunctionEventInvokeConfig871A1557": {
-      "Properties": {
-        "FunctionName": {
-          "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunction29841BD5",
-        },
-        "MaximumRetryAttempts": 2,
-        "Qualifier": "$LATEST",
-      },
-      "Type": "AWS::Lambda::EventInvokeConfig",
     },
     "EC2InstanceRunningSchedulerRunningSchedulerFunctionLogGroup9FDF6CF9": {
       "DeletionPolicy": "RetainExceptOnCreate",
@@ -957,10 +997,18 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           "Arn": {
             "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
           },
+          "DeadLetterConfig": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                "Arn",
+              ],
+            },
+          },
           "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Start"}}",
           "RetryPolicy": {
-            "MaximumEventAgeInSeconds": 86400,
-            "MaximumRetryAttempts": 185,
+            "MaximumEventAgeInSeconds": 900,
+            "MaximumRetryAttempts": 2,
           },
           "RoleArn": {
             "Fn::GetAtt": [
@@ -985,10 +1033,18 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
           "Arn": {
             "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
           },
+          "DeadLetterConfig": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                "Arn",
+              ],
+            },
+          },
           "Input": "{"Params":{"TagKey":"WorkHoursRunning","TagValues":["YES"],"Mode":"Stop"}}",
           "RetryPolicy": {
-            "MaximumEventAgeInSeconds": 86400,
-            "MaximumRetryAttempts": 185,
+            "MaximumEventAgeInSeconds": 900,
+            "MaximumRetryAttempts": 2,
           },
           "RoleArn": {
             "Fn::GetAtt": [
@@ -999,6 +1055,15 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
         },
       },
       "Type": "AWS::Scheduler::Schedule",
+    },
+    "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC": {
+      "DeletionPolicy": "RetainExceptOnCreate",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true,
+      },
+      "Type": "AWS::SQS::Queue",
+      "UpdateReplacePolicy": "Retain",
     },
     "SchedulerRoleForTargete08d553488D726": {
       "Properties": {
@@ -1053,6 +1118,16 @@ exports[`EC2InstanceRunningScheduleStack specific (custom schedule and timezone)
               "Effect": "Allow",
               "Resource": {
                 "Ref": "EC2InstanceRunningSchedulerRunningSchedulerFunctionAliaslive67072D6B",
+              },
+            },
+            {
+              "Action": "sqs:SendMessage",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "EC2InstanceRunningSchedulerScheduleDeadLetterQueueEA955FCC",
+                  "Arn",
+                ],
               },
             },
           ],

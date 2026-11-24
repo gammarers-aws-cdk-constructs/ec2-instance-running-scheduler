@@ -8,9 +8,10 @@
 
 Provisions EventBridge Scheduler rules and a Durable Execution Lambda that start/stop tagged EC2 instances.
 
-Each schedule invokes the function with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
-the Resource Groups Tagging API and EC2 APIs. Notification uses {@link EC2InstanceRunningSchedulerProps.notification}
-(logs only when omitted).
+Each schedule invokes alias `live` with `Params` (`TagKey`, `TagValues`, `Mode`). The function uses
+the Resource Groups Tagging API and EC2 APIs. A failed delivery is retried twice and only for
+15 minutes, then sent to an SQS dead-letter queue created by this construct. Notification uses
+{@link EC2InstanceRunningSchedulerProps.notification} (logs only when omitted).
 
 Per-instance wait timeouts are configured via {@link EC2InstanceRunningSchedulerProps.resourceWait}
 and enforced in the handler before the Durable execution timeout. Lambda memory, invoke timeout,
@@ -1145,7 +1146,7 @@ Platform alarms from `lambda-failure-detector` include `Errors` and `Throttles`.
 - `lambdaThrottlesAlarm` – `AWS/Lambda` `Throttles` metric.
 - `instanceStatusFailureAlarm` – log filter for `ResourceWaitFailed:*`.
 - `notificationPostFailureAlarm` – log filter for `running-scheduler: notification post failed`.
-- `durableExecutionFailureAlarm` – other handler-level `ERROR` logs (excluding the above).
+- `durableExecutionFailureAlarm` – log filter for {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}.
 
 Custom metrics are published under the `EC2InstanceRunningScheduler` namespace.
 
@@ -1297,7 +1298,7 @@ Any object.
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.destinationDeliveryFailuresAlarm">destinationDeliveryFailuresAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when `DestinationDeliveryFailures` is non-zero, when opted in. |
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.iteratorAgeAlarm">iteratorAgeAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when stream `IteratorAge` reaches the configured threshold, when opted in. |
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.logGroup">logGroup</a></code> | <code>aws-cdk-lib.aws_logs.ILogGroup</code> | Log group used for log metric filters, when log filters are configured. |
-| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.durableExecutionFailureAlarm">durableExecutionFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires on handler-level ERROR logs outside instance waiting and notification post failures. |
+| <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.durableExecutionFailureAlarm">durableExecutionFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when the handler logs {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}. |
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.instanceStatusFailureAlarm">instanceStatusFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when instance stable-state waiting fails (`ResourceWaitFailed:*`). |
 | <code><a href="#ec2-instance-running-scheduler.RunningSchedulerFailureDetection.property.notificationPostFailureAlarm">notificationPostFailureAlarm</a></code> | <code>aws-cdk-lib.aws_cloudwatch.Alarm</code> | Fires when a configured Slack, SNS, or EventBridge notification send fails. |
 
@@ -1421,7 +1422,7 @@ public readonly durableExecutionFailureAlarm: Alarm;
 
 - *Type:* aws-cdk-lib.aws_cloudwatch.Alarm
 
-Fires on handler-level ERROR logs outside instance waiting and notification post failures.
+Fires when the handler logs {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}.
 
 ---
 

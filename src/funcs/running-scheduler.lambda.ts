@@ -15,7 +15,7 @@ import {
   StopInstancesCommand,
 } from '@aws-sdk/client-ec2';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
+import { ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { WebClient } from '@slack/web-api';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
@@ -28,12 +28,20 @@ import {
   type NotificationInstance,
 } from './core/notification-message';
 import {
+  failedInstanceIds,
+  formatMapFailure,
+  hasMapItemFailure,
+  instanceIdFromTargetArn,
+  notStartedMapCount,
+} from './core/running-scheduler-map-failure';
+import {
   formatResourceWaitFailure,
   getWaitAbortReason,
   isDesiredStableState,
   isTransitioningState,
   type ResourceWaitLimits,
 } from './core/running-scheduler-predicates';
+import { collectTaggedInstanceArns } from './core/running-scheduler-tag-pages';
 import {
   parseMaxConcurrencyFromEnv,
   parseNotificationFromEnv,
@@ -48,10 +56,15 @@ import {
   NOTIFICATION_EVENT_DETAIL_TYPE,
   NOTIFICATION_EVENT_SOURCE,
   NOTIFICATION_POST_FAILED_LOG,
+  RUNNING_SCHEDULER_EXECUTION_FAILED_LOG,
 } from '../settings/consts';
 
 /** Total SDK attempts per send, including the first call. Transient errors stay inside the SDK. */
 const AWS_SDK_MAX_ATTEMPTS = 3;
+/** One Slack Web API request. The client default has no timeout. */
+const SLACK_REQUEST_TIMEOUT_MS = 30_000;
+/** Slack Web API retries after the first attempt. The client default retries for about 30 minutes. */
+const SLACK_RETRIES = 2;
 /** TCP connect timeout for AWS SDK clients. */
 const AWS_SDK_CONNECTION_TIMEOUT_MS = 5_000;
 /** Per-attempt HTTP timeout for AWS SDK clients. */
@@ -136,13 +149,33 @@ const isSlackSecret = (value: unknown): value is SlackSecret => {
   return true;
 };
 
-/** Slack Web API client and channel loaded for this invocation. */
-interface SlackClientBinding {
-  /** Slack Web API client. */
-  readonly client: WebClient;
-  /** Channel passed to `chat.postMessage`. */
-  readonly channel: string;
-}
+/**
+ * Reads the Slack secret for one post.
+ *
+ * The caller must invoke this inside the post step. The return value stays in that step and is not checkpointed.
+ *
+ * @param secretName - Secrets Manager name from the Lambda environment.
+ * @returns Token and channel for `chat.postMessage`.
+ * @throws {Error} When the secret JSON is missing non-empty `token` or `channel`.
+ */
+const readSlackSecret = async (secretName: string): Promise<SlackSecret> => {
+  const value: unknown = await secretFetcher.getSecretValue(secretName, SLACK_SECRET_FETCH_OPTIONS);
+  if (!isSlackSecret(value)) {
+    throw new Error('Slack secret must contain token and channel.');
+  }
+  return value;
+};
+
+/**
+ * Slack client with an explicit timeout and retry cap.
+ *
+ * @param token - Bot token from {@link readSlackSecret}. Not written to a step result.
+ * @returns Client used for one post.
+ */
+const slackWebClient = (token: string): WebClient => new WebClient(token, {
+  timeout: SLACK_REQUEST_TIMEOUT_MS,
+  retryConfig: { retries: SLACK_RETRIES },
+});
 
 /**
  * Text of an unknown thrown value, without assuming it is an {@link Error}.
@@ -180,8 +213,7 @@ const processOneResource = async (
   resourceIndex: number,
   waitLimits: ResourceWaitLimits,
 ): Promise<{ resource: string; status: string; account: string; region: string; identifier: string }> => {
-  const parts = targetResource.split('/');
-  const identifier = parts[parts.length - 1] ?? 'unknown';
+  const identifier = instanceIdFromTargetArn(targetResource);
   const arnParts = targetResource.split(':');
   const account = arnParts[4] ?? '';
   const region = arnParts[3] ?? '';
@@ -250,7 +282,7 @@ const processOneResource = async (
         identifier,
         seconds: waitLimits.statusChangeWaitSeconds,
       });
-      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
+      await ctx.wait(`${stepPrefix}-wait-after-start-${loopCount}`, { seconds: waitLimits.statusChangeWaitSeconds });
       loopCount += 1;
       continue;
     }
@@ -265,7 +297,7 @@ const processOneResource = async (
         identifier,
         seconds: waitLimits.statusChangeWaitSeconds,
       });
-      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
+      await ctx.wait(`${stepPrefix}-wait-after-stop-${loopCount}`, { seconds: waitLimits.statusChangeWaitSeconds });
       loopCount += 1;
       continue;
     }
@@ -278,7 +310,7 @@ const processOneResource = async (
         mode,
         seconds: waitLimits.statusChangeWaitSeconds,
       });
-      await ctx.wait({ seconds: waitLimits.statusChangeWaitSeconds });
+      await ctx.wait(`${stepPrefix}-wait-while-transitioning-${loopCount}`, { seconds: waitLimits.statusChangeWaitSeconds });
       loopCount += 1;
       continue;
     }
@@ -324,41 +356,6 @@ interface ProcessedInstance extends NotificationInstance {
 }
 
 /**
- * Loads Slack credentials when that channel is selected.
- *
- * A secret that is not JSON with non-empty `token` and `channel` is a configuration error and throws.
- * Send failures later in the run are logged and do not throw.
- *
- * @param ctx - Root durable execution context.
- * @param notification - Channel resolved from the environment.
- * @returns Slack client, or `undefined` when the channel is not Slack.
- * @throws {Error} When the secret JSON is missing `token` or `channel`.
- */
-const loadSlackClient = async (
-  ctx: DurableContext,
-  notification: ResolvedNotification,
-): Promise<SlackClientBinding | undefined> => {
-  if (notification.channel !== NOTIFICATION_CHANNEL_SLACK) {
-    return undefined;
-  }
-
-  const slackSecretName = notification.slackSecretName;
-  const slackSecretValue: unknown = await ctx.step('fetch-slack-secret', async () => {
-    ctx.logger.info('running-scheduler: fetching Slack secret', { secretName: slackSecretName });
-    return secretFetcher.getSecretValue(slackSecretName, SLACK_SECRET_FETCH_OPTIONS);
-  });
-  ctx.logger.info('running-scheduler: Slack secret loaded');
-  if (!isSlackSecret(slackSecretValue)) {
-    throw new Error('Slack secret must contain token and channel.');
-  }
-
-  return {
-    client: new WebClient(slackSecretValue.token),
-    channel: slackSecretValue.channel,
-  };
-};
-
-/**
  * Logs a notification send failure for the CloudWatch metric filter.
  *
  * The instance start/stop result is left unchanged.
@@ -382,23 +379,31 @@ const logNotificationFailure = (
 };
 
 /**
- * Posts the Slack parent message. A send failure is logged and returns no thread timestamp.
+ * Posts the Slack parent message.
+ *
+ * The secret is read inside the step. The checkpoint stores the thread timestamp, or an empty string when the post fails.
+ * A secret that is not JSON with non-empty `token` and `channel` fails the step and the run.
+ * A `chat.postMessage` failure is logged and returns no thread timestamp.
  *
  * @param ctx - Root durable execution context.
- * @param slack - Slack client and channel.
+ * @param slackSecretName - Secrets Manager name. Not a step result.
  * @param mode - Start or stop.
  * @returns Slack thread timestamp, or `undefined` when the post failed.
+ * @throws {Error} When the secret JSON is missing `token` or `channel`.
  */
 const postSlackParent = async (
   ctx: DurableContext,
-  slack: SlackClientBinding,
+  slackSecretName: string,
   mode: 'Start' | 'Stop',
 ): Promise<string | undefined> => {
   ctx.logger.info('running-scheduler: posting parent Slack message', { mode });
   const threadTs = await ctx.step('post-slack-messages', async () => {
+    ctx.logger.info('running-scheduler: fetching Slack secret', { secretName: slackSecretName });
+    const secret = await readSlackSecret(slackSecretName);
+    const client = slackWebClient(secret.token);
     try {
-      const posted = await slack.client.chat.postMessage({
-        channel: slack.channel,
+      const posted = await client.chat.postMessage({
+        channel: secret.channel,
         text: notificationSubject(mode),
       });
       return posted.ts ?? '';
@@ -417,14 +422,17 @@ const postSlackParent = async (
 /**
  * Posts one Slack thread reply for a finished instance.
  *
+ * Reads the secret again inside this step so the parent step does not pass the token or channel.
+ *
  * @param ctx - Child durable context for this instance.
- * @param slack - Slack client and channel.
+ * @param slackSecretName - Secrets Manager name. Not a step result.
  * @param threadTs - Parent thread timestamp. Omitted when the parent post failed.
  * @param instance - Finished instance.
+ * @throws {Error} When the secret JSON is missing `token` or `channel`.
  */
 const postSlackThread = async (
   ctx: DurableContext,
-  slack: SlackClientBinding,
+  slackSecretName: string,
   threadTs: string | undefined,
   instance: ProcessedInstance,
 ): Promise<void> => {
@@ -434,9 +442,11 @@ const postSlackThread = async (
     status: instance.status,
   });
   await ctx.step('post-slack-child-messages', async () => {
+    const secret = await readSlackSecret(slackSecretName);
+    const client = slackWebClient(secret.token);
     try {
-      await slack.client.chat.postMessage({
-        channel: slack.channel,
+      await client.chat.postMessage({
+        channel: secret.channel,
         ...(threadTs ? { thread_ts: threadTs } : {}),
         attachments: [
           {
@@ -537,35 +547,15 @@ const publishSummary = async (
 };
 
 /**
- * Durable Lambda entry point for the EC2 running scheduler.
+ * One scheduler invocation.
  *
- * Resolves instances via Resource Groups Tagging API, runs {@link processOneResource} for each ARN
- * in parallel (bounded concurrency), then reports the run on the configured notification channel.
- * Logs are the default. Slack posts a parent message and per-instance thread replies. SNS publishes
- * one plain-text message after processing. EventBridge publishes one event to the configured bus.
- * Durable `step` / `wait` / `map` let the run resume across suspensions.
+ * Failures are not caught here. {@link handler} logs them and rethrows.
  *
- * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT`,
- * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS`, and `PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS`
- * via {@link parseResourceWaitLimitsFromEnv}, and map concurrency from
- * `PROCESS_RESOURCES_MAX_CONCURRENCY` via {@link parseMaxConcurrencyFromEnv}.
- * Slack loads its secret via {@link secretFetcher} (Parameters and Secrets Lambda Extension).
- * Notification send failures are logged as {@link NOTIFICATION_POST_FAILED_LOG} and do not fail the run.
- *
- * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
+ * @param event - Scheduler payload.
  * @param ctx - Root durable execution context.
- * @returns
- * - `{ status: 'TargetResourcesNotFound' }` when no instances match the tag filter. Nothing is sent.
- * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
- * @throws {Error} If `Params` is invalid, the Slack secret is incomplete or not JSON with `token` and `channel`,
- *   or instance processing fails (including `ResourceWaitFailed:*` errors).
- * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not positive integers.
- * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
- * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.
- * @throws {import('fetch-retrier').FetchRetrierAbortError} When extension requests time out after all retries.
- * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} When secret-fetch retry options are invalid.
+ * @returns The same result as {@link handler}.
  */
-export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: DurableContext) => {
+const runRunningScheduler = async (event: SchedulerEvent, ctx: DurableContext) => {
   const params = event.Params;
 
   ctx.logger.info('running-scheduler: invocation', {
@@ -581,21 +571,18 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
   const waitLimits = parseResourceWaitLimitsFromEnv();
   const maxConcurrency = parseMaxConcurrencyFromEnv();
   const notification = parseNotificationFromEnv();
-  const slack = await loadSlackClient(ctx, notification);
+  const slackSecretName = notification.channel === NOTIFICATION_CHANNEL_SLACK
+    ? notification.slackSecretName
+    : undefined;
 
   const targetResources = await ctx.step('get-target-resources', async () => {
     const client = new ResourceGroupsTaggingAPIClient(awsSdkClientConfig());
-    const result = await client.send(
-      new GetResourcesCommand({
-        ResourceTypeFilters: ['ec2:instance'],
-        TagFilters: [{ Key: params.TagKey, Values: params.TagValues }],
-      }),
-    );
-    const arns = (result.ResourceTagMappingList ?? [])
-      .map((mapping: { ResourceARN?: string }) => mapping.ResourceARN)
-      .filter((arn: string | undefined): arn is string => arn != null);
-    ctx.logger.info('running-scheduler: get-target-resources done', { count: arns.length });
-    return arns;
+    const collected = await collectTaggedInstanceArns(client, params.TagKey, params.TagValues);
+    ctx.logger.info('running-scheduler: get-target-resources done', {
+      count: collected.arns.length,
+      pageCount: collected.pageCount,
+    });
+    return [...collected.arns];
   });
 
   if (targetResources.length === 0) {
@@ -603,7 +590,9 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
     return { status: 'TargetResourcesNotFound' as const };
   }
 
-  const threadTs = slack ? await postSlackParent(ctx, slack, params.Mode) : undefined;
+  const threadTs = slackSecretName !== undefined
+    ? await postSlackParent(ctx, slackSecretName, params.Mode)
+    : undefined;
 
   ctx.logger.info('running-scheduler: starting parallel instance processing', {
     count: targetResources.length,
@@ -611,21 +600,33 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
   });
 
   const results = await ctx.map(
+    'process-target-resources',
     targetResources,
     async (mapCtx: DurableContext, targetResource: string, index: number): Promise<ProcessedInstance> => {
       return mapCtx.runInChildContext(`resource-${index}`, async (childCtx: DurableContext) => {
         const result = await processOneResource(childCtx, targetResource, params, index, waitLimits);
-        if (!slack) {
+        if (slackSecretName === undefined) {
           return result;
         }
-        await postSlackThread(childCtx, slack, threadTs, result);
+        await postSlackThread(childCtx, slackSecretName, threadTs, result);
         return result;
       });
     },
     { maxConcurrency },
   );
 
-  results.throwIfError();
+  if (hasMapItemFailure(results.failureCount)) {
+    const failedItems = results.failed().slice().sort((left, right) => left.index - right.index);
+    const failedNames = failedInstanceIds(targetResources, failedItems.map((item) => item.index));
+    const notStarted = notStartedMapCount(targetResources.length, results.totalCount);
+    const firstErrorMessage = failedItems[0]?.error?.message ?? '';
+    ctx.logger.error('running-scheduler: map failed', {
+      failedNames,
+      notStarted,
+    });
+    throw new Error(formatMapFailure(failedNames, notStarted, firstErrorMessage));
+  }
+
   const resultList = results.getResults();
   await publishSummary(ctx, notification, params.Mode, resultList);
 
@@ -639,4 +640,59 @@ export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: D
     processed: targetResources.length,
     results: resultList,
   };
+};
+
+/**
+ * Writes {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG} for a failed invocation.
+ *
+ * The log carries no instance id, because this wrapper does not know which instance failed.
+ * It also omits secrets. {@link handler} rethrows the original error.
+ *
+ * @param error - Failure from {@link runRunningScheduler}.
+ */
+const logExecutionFailure = (error: unknown): void => {
+  console.error(RUNNING_SCHEDULER_EXECUTION_FAILED_LOG, {
+    identifier: undefined,
+    errorMessage: error instanceof Error ? error.message : undefined,
+  });
+};
+
+/**
+ * Durable Lambda entry point for the EC2 running scheduler.
+ *
+ * Resolves instances via every page of `tag:GetResources`, runs {@link processOneResource} for each ARN
+ * in parallel (bounded concurrency), then reports the run on the configured notification channel.
+ * Logs are the default. Slack posts a parent message and per-instance thread replies. SNS publishes
+ * one plain-text message after processing. EventBridge publishes one event to the configured bus.
+ * Durable `step` / `wait` / `map` let the run resume across suspensions.
+ *
+ * Reads per-instance wait limits from `PROCESS_RESOURCE_MAX_LOOP_COUNT`,
+ * `PROCESS_RESOURCE_MAX_ELAPSED_SECONDS`, and `PROCESS_RESOURCE_STATUS_CHANGE_WAIT_SECONDS`
+ * via {@link parseResourceWaitLimitsFromEnv}, and map concurrency from
+ * `PROCESS_RESOURCES_MAX_CONCURRENCY` via {@link parseMaxConcurrencyFromEnv}.
+ * Slack reads its secret via {@link secretFetcher} inside each post step (Parameters and Secrets Lambda Extension).
+ * The token and channel are not step results, so durable execution history does not store them.
+ * Notification send failures are logged as {@link NOTIFICATION_POST_FAILED_LOG} and do not fail the run.
+ * Any other failure is written with {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG} and rethrown.
+ *
+ * @param event - Payload from EventBridge Scheduler; must include `Params.TagKey`, `Params.TagValues`, `Params.Mode`.
+ * @param ctx - Root durable execution context.
+ * @returns
+ * - `{ status: 'TargetResourcesNotFound' }` when every tag page has zero instance ARNs. Nothing is sent.
+ * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
+ * @throws {Error} If `Params` is invalid, the Slack secret is incomplete or not JSON with `token` and `channel`,
+ *   or instance processing fails (including `MapFailed:` with the child `ResourceWaitFailed:*` message).
+ * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not positive integers.
+ * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
+ * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.
+ * @throws {import('fetch-retrier').FetchRetrierAbortError} When extension requests time out after all retries.
+ * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} When secret-fetch retry options are invalid.
+ */
+export const handler = withDurableExecution(async (event: SchedulerEvent, ctx: DurableContext) => {
+  try {
+    return await runRunningScheduler(event, ctx);
+  } catch (error: unknown) {
+    logExecutionFailure(error);
+    throw error;
+  }
 });

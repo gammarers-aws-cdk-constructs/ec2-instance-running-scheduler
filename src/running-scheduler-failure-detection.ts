@@ -1,7 +1,7 @@
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import { type Alarm } from 'aws-cdk-lib/aws-cloudwatch';
+import { type IFunction } from 'aws-cdk-lib/aws-lambda';
+import { type ILogGroup } from 'aws-cdk-lib/aws-logs';
+import { type ITopic } from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import {
   isLambdaFailureDetectionEnabled,
@@ -9,7 +9,7 @@ import {
   type LambdaFailureDetection,
   type LogFailureFilter,
 } from 'lambda-failure-detector';
-import { NOTIFICATION_POST_FAILED_LOG } from './settings/consts';
+import { NOTIFICATION_POST_FAILED_LOG, RUNNING_SCHEDULER_EXECUTION_FAILED_LOG } from './settings/consts';
 
 /** CloudWatch custom metric namespace for running-scheduler log-based failure metrics. */
 const METRIC_NAMESPACE = 'EC2InstanceRunningScheduler';
@@ -38,7 +38,7 @@ const RUNNING_SCHEDULER_LOG_FILTERS: LogFailureFilter[] = [
   },
   {
     id: DURABLE_EXECUTION_FAILURE_ID,
-    filterPattern: `"ERROR" - "processOneResource" - "ResourceWaitFailed" - "${NOTIFICATION_POST_FAILED_LOG}"`,
+    filterPattern: `"${RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}"`,
     metricNamespace: METRIC_NAMESPACE,
     metricName: 'DurableExecutionFailure',
   },
@@ -51,9 +51,9 @@ interface CreateRunningSchedulerFailureDetectionProps {
   /** Failure detection options; alarms are created only when {@link RunningSchedulerFailureDetectionProps.enabled} is true. */
   readonly failureDetection?: RunningSchedulerFailureDetectionProps;
   /** Running scheduler Lambda to monitor. */
-  readonly runningScheduleFunction: lambda.IFunction;
+  readonly runningScheduleFunction: IFunction;
   /** Application log group for the running scheduler Lambda. */
-  readonly logGroup: logs.ILogGroup;
+  readonly logGroup: ILogGroup;
 }
 
 /**
@@ -73,11 +73,11 @@ export interface RunningSchedulerFailureDetectionProps extends LambdaFailureDete
  */
 export interface RunningSchedulerFailureDetectionResourcesProps {
   /** Existing SNS topic for alarm actions. When omitted, alarms have no SNS actions. */
-  readonly alarmTopic?: sns.ITopic;
+  readonly alarmTopic?: ITopic;
   /** Running scheduler Lambda whose platform metrics are alarmed. */
-  readonly runningScheduleFunction: lambda.IFunction;
+  readonly runningScheduleFunction: IFunction;
   /** Application log group used by the scheduler log filters. */
-  readonly logGroup: logs.ILogGroup;
+  readonly logGroup: ILogGroup;
 }
 
 /**
@@ -91,7 +91,7 @@ export interface RunningSchedulerFailureDetectionResourcesProps {
 const requireLogFilterAlarm = (
   detector: LambdaFailureDetector,
   id: string,
-): cloudwatch.Alarm => {
+): Alarm => {
   const alarm = detector.findLogFilterAlarm(id);
   if (!alarm) {
     throw new Error(`RunningSchedulerFailureDetection: missing log filter alarm for id "${id}".`);
@@ -109,17 +109,17 @@ const requireLogFilterAlarm = (
  * - `lambdaThrottlesAlarm` – `AWS/Lambda` `Throttles` metric.
  * - `instanceStatusFailureAlarm` – log filter for `ResourceWaitFailed:*`.
  * - `notificationPostFailureAlarm` – log filter for `running-scheduler: notification post failed`.
- * - `durableExecutionFailureAlarm` – other handler-level `ERROR` logs (excluding the above).
+ * - `durableExecutionFailureAlarm` – log filter for {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}.
  *
  * Custom metrics are published under the `EC2InstanceRunningScheduler` namespace.
  */
 export class RunningSchedulerFailureDetection extends LambdaFailureDetector {
   /** Fires when instance stable-state waiting fails (`ResourceWaitFailed:*`). */
-  public readonly instanceStatusFailureAlarm: cloudwatch.Alarm;
+  public readonly instanceStatusFailureAlarm: Alarm;
   /** Fires when a configured Slack, SNS, or EventBridge notification send fails. */
-  public readonly notificationPostFailureAlarm: cloudwatch.Alarm;
-  /** Fires on handler-level ERROR logs outside instance waiting and notification post failures. */
-  public readonly durableExecutionFailureAlarm: cloudwatch.Alarm;
+  public readonly notificationPostFailureAlarm: Alarm;
+  /** Fires when the handler logs {@link RUNNING_SCHEDULER_EXECUTION_FAILED_LOG}. */
+  public readonly durableExecutionFailureAlarm: Alarm;
 
   /**
    * @param scope - Parent construct.

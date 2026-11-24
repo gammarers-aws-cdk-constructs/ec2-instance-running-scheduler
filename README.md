@@ -17,19 +17,19 @@ AWS CDK construct library that starts and stops tagged EC2 instances on a cron s
 - **Stable-state waiting** – After start/stop, waits and re-describes until `running` or `stopped`, with configurable wait limits (`resourceWait`).
 - **Configurable Lambda runtime** – Memory, invoke timeout, and bounded concurrency via `runtime`; Durable timeout and retention via `durable`.
 - **Optional notification** – Omit `notification` to log only. Otherwise choose one channel: Slack (parent message and thread replies), Amazon SNS (one plain-text message, including email subscriptions), or an EventBridge custom bus (one JSON event). A send failure is logged and does not fail the instance run.
-- **Optional failure detection** – Opt-in CloudWatch alarms via `failureDetection` (`enabled` / optional `alarmTopic`). Uses [`lambda-failure-detector`](https://www.npmjs.com/package/lambda-failure-detector) for platform Lambda `Errors` and `Throttles`, plus scheduler-specific log filters (`ResourceWaitFailed`, notification send failures, other handler `ERROR` logs). The construct never creates an SNS topic for alarms.
+- **Optional failure detection** – Opt-in CloudWatch alarms via `failureDetection` (`enabled` / optional `alarmTopic`). Uses [`lambda-failure-detector`](https://www.npmjs.com/package/lambda-failure-detector) for platform Lambda `Errors` and `Throttles`, plus scheduler-specific log filters (`ResourceWaitFailed`, notification send failures, and `RunningSchedulerExecutionFailed`). The construct never creates an SNS topic for alarms.
 - **Scheduling toggle** – Enable or disable both schedules without removing the stack (`enableScheduling`).
 
 ## How it works
 
 1. Tag EC2 instances in the same account and region with the `targetResource` tag key and one of the tag values **before** enabling schedules.
-2. EventBridge Scheduler invokes the Lambda alias on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`).
-3. The Durable handler discovers matching instances via the Resource Groups Tagging API, then starts or stops them in parallel (bounded by `runtime.maxConcurrency`).
-4. For each instance it waits (`resourceWait`) until the desired stable state, or fails with a `ResourceWaitFailed:*` error. Defaults are 90 loops, 1800 seconds, and 20 seconds between describes. Lambda invoke `timeout` defaults to 15 minutes. Durable `executionTimeout` defaults to 2 hours and `retentionPeriod` to 1 day.
-5. When no instance matches, the run returns `TargetResourcesNotFound` and sends nothing.
+2. EventBridge Scheduler invokes the Lambda alias `live` on the start/stop cron with `Params.TagKey`, `Params.TagValues`, and `Params.Mode` (`Start` or `Stop`). A failed delivery is retried twice and only while the event is younger than 15 minutes, then sent to an SQS dead-letter queue. Those limits are not configurable via props today. The queue keeps messages for 14 days.
+3. The Durable handler discovers matching instances via the Resource Groups Tagging API. It reads every `tag:GetResources` page (at most 100 resources each), then starts or stops them in parallel (bounded by `runtime.maxConcurrency`). The log line `running-scheduler: get-target-resources done` includes the instance count and the page count.
+4. For each instance it waits (`resourceWait`) until the desired stable state, or the run fails. The thrown text starts with `MapFailed:` and includes the child `ResourceWaitFailed:*` message. Defaults are 90 loops, 1800 seconds, and 20 seconds between describes. Lambda invoke `timeout` defaults to 15 minutes. Durable `executionTimeout` defaults to 2 hours and `retentionPeriod` to 1 day.
+5. When no instance matches on any page, the run returns `TargetResourcesNotFound` and sends nothing.
 6. When instances were processed, the selected channel reports the result:
    - **Omitted `notification`** – the same plain text is written to the function log. No Slack, SNS, or EventBridge permission is added.
-   - **Slack** – a parent message, then one thread reply per instance. The secret is read with the Parameters and Secrets Lambda Extension.
+   - **Slack** – a parent message, then one thread reply per instance. The secret is read with the Parameters and Secrets Lambda Extension inside each post. Durable execution history stores the thread timestamp, not the token or channel.
    - **SNS** – one plain-text publish after every instance finishes. Email subscriptions show that text; HTML is not used.
    - **EventBridge** – one `PutEvents` call to the bus you pass. This construct does not create the bus or a rule.
 7. A Slack, SNS, or EventBridge send failure is logged as `running-scheduler: notification post failed` and the run still completes. A Slack secret that is not JSON with `token` and `channel` throws.
@@ -114,20 +114,19 @@ Deploy checklist:
 Use `EC2InstanceRunningScheduler` when the scheduler shares a stack with other resources. Put the SNS topic in that stack and subscribe the email protocol yourself. The construct grants `sns:Publish` on that topic and does not create the subscription. The message is plain text: the subject is `😆 Starts the scheduled EC2 Instance.` or `🥱 Stops the scheduled EC2 Instance.`, and the body is one block per instance (emoji, account, region, identifier, status).
 
 ```typescript
-import * as cdk from 'aws-cdk-lib';
-import { TimeZone } from 'aws-cdk-lib';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import { App, Stack, TimeZone } from 'aws-cdk-lib';
+import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EC2InstanceRunningScheduler } from 'ec2-instance-running-scheduler';
 
-const app = new cdk.App();
-const stack = new cdk.Stack(app, 'MyStack', {
+const app = new App();
+const stack = new Stack(app, 'MyStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
 });
 
-const mailTopic = new sns.Topic(stack, 'SchedulerMail');
+const mailTopic = new Topic(stack, 'SchedulerMail');
 
 new EC2InstanceRunningScheduler(stack, 'EC2InstanceRunningScheduler', {
   targetResource: {
@@ -215,7 +214,7 @@ Written to `PROCESS_RESOURCE_MAX_LOOP_COUNT`, `PROCESS_RESOURCE_MAX_ELAPSED_SECO
 - `maxElapsedSeconds` – Maximum wall-clock seconds spent waiting for one instance to stabilize (default: **1800**, 30 minutes). Must be a positive integer when set.
 - `statusChangeWaitSeconds` – Seconds between describe iterations after start/stop or while transitioning (default: **20**). Must be a positive integer when set.
 
-When a limit is exceeded during waiting, the handler throws an error with prefix `ResourceWaitFailed:` (`MaxLoopCountExceeded`, `MaxElapsedTimeExceeded`, or `UnexpectedInstanceState` for unknown EC2 states).
+When a limit is exceeded during waiting, that instance fails with `ResourceWaitFailed:` (`MaxLoopCountExceeded`, `MaxElapsedTimeExceeded`, or `UnexpectedInstanceState` for unknown EC2 states). The run then throws `MapFailed:` and includes that message.
 
 ### RunningSchedulerRuntimeProps
 
@@ -250,7 +249,7 @@ When enabled:
 | Lambda throttles | `AWS/Lambda` `Throttles` metric (platform) |
 | Instance status failure | Log filter: `ResourceWaitFailed` |
 | Notification post failure | Log filter: `running-scheduler: notification post failed` |
-| Durable execution failure | Other handler `ERROR` logs (excluding the above) |
+| Durable execution failure | Log filter: `RunningSchedulerExecutionFailed` |
 
 Custom metrics use the `EC2InstanceRunningScheduler` namespace. Access created alarms via `EC2InstanceRunningScheduler.failureDetection` when enabled.
 
@@ -262,7 +261,7 @@ See [API.md](./API.md).
 
 - **Node.js** ≥ 20.0.0 (for developing or synthesizing CDK apps that depend on this package).
 - **aws-cdk-lib** ^2.232.0, **constructs** ^10.5.1, and **lambda-failure-detector** ^0.2.1 (peer dependencies).
-- **AWS** – EventBridge Scheduler; Lambda with Durable Execution (Node.js **24.x** runtime in the construct); EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`). Slack also needs Secrets Manager and the Parameters and Secrets Lambda Extension. SNS needs `sns:Publish` on the topic you pass. EventBridge needs `events:PutEvents` on the bus you pass. The construct adds those permissions for the channel you select.
+- **AWS** – EventBridge Scheduler; Lambda with Durable Execution (Node.js **24.x** runtime in the construct); EC2 (`DescribeInstances`, `StartInstances`, `StopInstances`); Resource Groups Tagging API (`tag:GetResources`); an SQS dead-letter queue for schedule deliveries that exhaust the retry limit. Slack also needs Secrets Manager and the Parameters and Secrets Lambda Extension. SNS needs `sns:Publish` on the topic you pass. EventBridge needs `events:PutEvents` on the bus you pass. The construct adds those permissions for the channel you select, and it creates the dead-letter queue.
 
 ## Notes
 
@@ -271,12 +270,15 @@ See [API.md](./API.md).
 - SNS email is the plain-text `Message`. The `Subject` is the same parent line Slack uses. Emoji are included. HTML is not sent.
 - A notification send failure does not fail the start/stop run. A Slack secret with the wrong JSON shape does.
 - Start/stop IAM allows `ec2:StartInstances` and `ec2:StopInstances` only on instances in this account and region whose tag matches `targetResource`. Describe and tag lookup remain `Resource: *` because those APIs do not support resource-level permissions.
+- Durable `wait` and `map` names are part of the execution checkpoint. A run that resumes after those names change fails replay.
 
 ## Troubleshooting
 
 - **No Slack message, email, or event** – The function log group (default retention three months) is the place to look. After a successful create, stack deletion keeps that group (`RetainExceptOnCreate`). Omit `notification` and the run only writes `running-scheduler: notification` there. If the tag matches nothing, the run returns `TargetResourcesNotFound` and does not send.
+- **Fewer instances ran than expected** – `running-scheduler: get-target-resources done` logs `count` and `pageCount`. The handler follows `PaginationToken` until it is absent. `TargetResourcesNotFound` means every page had zero instance ARNs. Instances in another account or region are not listed.
 - **Slack fails before any instance starts** – The secret must be JSON with non-empty `token` and `channel`. That configuration error fails the run. A later `chat.postMessage` error is logged as `running-scheduler: notification post failed` and does not fail the run.
 - **SNS topic has no email** – Add an email subscription on the topic you passed. The scheduler only publishes.
+- **A start or stop delivery failed** – Scheduler retries that delivery twice, and only until the event is 15 minutes old. The event then sits in the SQS dead-letter queue (14-day retention). After a successful create, stack deletion keeps the queue (`RetainExceptOnCreate`). A failure after the Slack parent post can post that parent again on each retry, at most three deliveries.
 
 ## License
 

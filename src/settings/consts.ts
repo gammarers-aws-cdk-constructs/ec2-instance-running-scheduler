@@ -35,6 +35,14 @@ export const NOTIFICATION_CHANNEL_EVENT_BRIDGE = 'eventBridge';
  */
 export const NOTIFICATION_POST_FAILED_LOG = 'running-scheduler: notification post failed';
 
+/**
+ * Log line written when the running-scheduler handler fails.
+ *
+ * The handler prints this with `console.error` and rethrows. The durable-execution
+ * failure metric filter matches the same text.
+ */
+export const RUNNING_SCHEDULER_EXECUTION_FAILED_LOG = 'RunningSchedulerExecutionFailed';
+
 /** `Source` on the scheduler's EventBridge notification event. */
 export const NOTIFICATION_EVENT_SOURCE = 'ec2-instance-running-scheduler';
 
