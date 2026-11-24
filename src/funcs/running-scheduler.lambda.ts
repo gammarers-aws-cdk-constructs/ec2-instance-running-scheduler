@@ -28,6 +28,12 @@ import {
   type NotificationInstance,
 } from './core/notification-message';
 import {
+  failedInstanceIds,
+  formatMapFailure,
+  hasMapItemFailure,
+  notStartedMapCount,
+} from './core/running-scheduler-map-failure';
+import {
   formatResourceWaitFailure,
   getWaitAbortReason,
   isDesiredStableState,
@@ -608,7 +614,18 @@ const runRunningScheduler = async (event: SchedulerEvent, ctx: DurableContext) =
     { maxConcurrency },
   );
 
-  results.throwIfError();
+  if (hasMapItemFailure(results.failureCount)) {
+    const failedItems = results.failed().slice().sort((left, right) => left.index - right.index);
+    const failedNames = failedInstanceIds(targetResources, failedItems.map((item) => item.index));
+    const notStarted = notStartedMapCount(targetResources.length, results.totalCount);
+    const firstErrorMessage = failedItems[0]?.error?.message ?? '';
+    ctx.logger.error('running-scheduler: map failed', {
+      failedNames,
+      notStarted,
+    });
+    throw new Error(formatMapFailure(failedNames, notStarted, firstErrorMessage));
+  }
+
   const resultList = results.getResults();
   await publishSummary(ctx, notification, params.Mode, resultList);
 
@@ -663,7 +680,7 @@ const logExecutionFailure = (error: unknown): void => {
  * - `{ status: 'TargetResourcesNotFound' }` when every tag page has zero instance ARNs. Nothing is sent.
  * - `{ status: 'Completed', processed, results }` when instances were handled (`results` entries match {@link processOneResource} return shape).
  * @throws {Error} If `Params` is invalid, the Slack secret is incomplete or not JSON with `token` and `channel`,
- *   or instance processing fails (including `ResourceWaitFailed:*` errors).
+ *   or instance processing fails (including `MapFailed:` with the child `ResourceWaitFailed:*` message).
  * @throws {import('strict-env-resolver').StrictEnvValidationError} When required env vars are missing or not positive integers.
  * @throws {import('fetch-retrier').FetchRetrierHttpError} When the extension returns a non-retriable HTTP error.
  * @throws {import('fetch-retrier').FetchRetrierNetworkError} When extension requests fail at the network level.

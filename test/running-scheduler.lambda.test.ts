@@ -385,6 +385,7 @@ describe('running scheduler instance processing', () => {
     const execution = await runner.run({ payload: startEvent('Start') });
 
     expect(execution.getStatus()).toBe(ExecutionStatus.FAILED);
+    expect(execution.getError().errorMessage).toContain('MapFailed: names=i-checkpoint123 omittedNames=0 notStarted=0');
     expect(execution.getError().errorMessage).toContain('ResourceWaitFailed:UnexpectedInstanceState');
     expect(execution.getError().errorMessage).toContain(INSTANCE_ID);
   });
